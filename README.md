@@ -1,59 +1,33 @@
 # Azure Friday — SRE Agent Demo Lab
 
-**Complete lab for demonstrating Azure SRE Agent capabilities with Scott Hanselman**
+Deploy a realistic e-commerce platform ("Zava"), break it on purpose, and watch **Azure SRE Agent** detect, diagnose, and remediate. Built for the Scott Hanselman Azure Friday demo.
 
-> Deploy a realistic e-commerce platform ("Zava — Intelligent Athletic Apparel"), break it on purpose, and watch Azure SRE Agent detect, diagnose, and remediate issues autonomously.
+> **Audience:** Azure infrastructure engineers. You'll run scripts and click through the SRE Agent portal — no app dev work required.
 
 ---
 
-## Architecture
+## What gets deployed
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          Azure Resource Group (rg-zava)                │
-│                                                                        │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐               │
-│  │  app-zava     │   │ app-zava-    │   │ app-zava-    │               │
-│  │  (.NET 8)     │   │ itportal     │   │ warranty     │               │
-│  │  Main API     │   │ (Node 20)    │   │ (Python 3.12)│               │
-│  │  /health      │   │ IT Portal    │   │ HTTP API     │               │
-│  │  /api/products│   │              │   │ /warranty/*  │               │
-│  └──────┬───────┘   └──────────────┘   └──────────────┘               │
-│         │                                                              │
-│         ▼                                                              │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐               │
-│  │  sql-zava     │   │  law-zava    │   │  ai-zava     │               │
-│  │  SQL Server   │   │  Log         │   │  Application │               │
-│  │  ┌──────────┐ │   │  Analytics   │   │  Insights    │               │
-│  │  │sqldb-zava│ │   │  Workspace   │   │              │               │
-│  │  │ Basic 5  │ │   └──────────────┘   └──────────────┘               │
-│  │  │ DTU      │ │                                                     │
-│  │  └──────────┘ │   ┌──────────────────────────────────┐              │
-│  └──────────────┘   │  Azure Monitor Alert Rules        │              │
-│                      │  • DTU > 80%                      │              │
-│                      │  • HTTP 5xx errors                │              │
-│                      │  • Health check failures          │              │
-│                      └──────────────────────────────────┘              │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    ▼                ▼                ▼
-           ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-           │  SRE Agent 1 │ │  SRE Agent 2 │ │  ServiceNow  │
-           │  SQL & App   │ │  IT Support  │ │  PDI          │
-           │  Performance │ │  & SNOW      │ │  (Incidents)  │
-           │              │ │              │ │               │
-           │  MCP:        │ │  MCP:        │ └──────────────┘
-           │  • mssql-mcp │ │  • (none)    │
-           │  • github-mcp│ │              │
-           └──────────────┘ └──────────────┘
-
-           ┌──────────────────────────────────────────┐
-           │         Demo Simulator (Python)          │
-           │  simulator/demo.py                       │
-           │  Triggers scenarios 1-5 via SQL & HTTP   │
-           └──────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│           Resource Group: rg-zava-<suffix>              │
+│                                                         │
+│  App Service Plan (Linux, S2 Standard)                  │
+│   ├─ app-zava-<suffix>            .NET 8 storefront API │
+│   ├─ app-zava-<suffix>-itportal   Node 20 IT portal     │
+│   └─ app-zava-<suffix>-warranty   Python 3.12 warranty  │
+│                                                         │
+│  Azure SQL Server + DB (Basic, 5 DTU)                   │
+│  Application Insights + Log Analytics                   │
+│  Azure Monitor alert rules:                             │
+│    • alert-<prefix>-dtu-high       (DTU > 80%)          │
+│    • alert-<prefix>-http-5xx       (HTTP 5xx errors)    │
+│    • alert-<prefix>-health-check   (probe failures)     │
+│  Azure Portal dashboard                                 │
+└─────────────────────────────────────────────────────────┘
 ```
+
+**Not deployed by Bicep:** the Azure SRE Agent itself. It is created in the portal — see [Part 2](#part-2--create-the-sre-agent-portal-step) below.
 
 ---
 
@@ -61,516 +35,337 @@
 
 | Tool | Version | Install |
 |------|---------|---------|
-| **Azure subscription** | — | [Free account](https://azure.microsoft.com/free/) |
-| **Azure CLI** | 2.60+ | `winget install Microsoft.AzureCLI` |
-| **.NET SDK** | 8.0+ | `winget install Microsoft.DotNet.SDK.8` |
-| **Python** | 3.11+ | `winget install Python.Python.3.12` |
-| **Node.js** | 18+ | `winget install OpenJS.NodeJS.LTS` |
-| **srectl CLI** | latest | [Install docs](https://learn.microsoft.com/azure/sre-agent) |
-| **ServiceNow PDI** | — | [Free instance](https://developer.servicenow.com/) |
+| Azure CLI | 2.60+ | `winget install Microsoft.AzureCLI` |
+| PowerShell | 7+ | `winget install Microsoft.PowerShell` |
+| Bicep | bundled with az | `az bicep install` |
+| Python | 3.11+ | `winget install Python.Python.3.12` |
 
-> **Optional:** SQL Server Management Studio (SSMS) or Azure Data Studio for database inspection.
+You also need:
 
----
+- An Azure **tenant ID** and **subscription ID** with Owner or Contributor.
+- *(Scenario 3 deeper analysis only)* A GitHub fine-grained PAT with `repo` read.
+- *(Scenario 4 only)* A free [ServiceNow PDI](https://developer.servicenow.com/). Skip if you only run Scenarios 1–3.
 
-## Quick Start (5 minutes)
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/meetshamir/AzureFriday-SREAgent.git
-cd AzureFriday-SREAgent
-
-# 2. Log into Azure
-az login
-
-# 3. Deploy everything with one command
-./infra/deploy.ps1 -ResourceGroup rg-zava -Location westus2 -SqlPassword '<sql-password>'
-
-# — OR deploy step-by-step: —
-
-# Create resource group
-az group create -n rg-zava -l westus2
-
-# Deploy infrastructure
-az deployment group create \
-  -g rg-zava \
-  -f infra/main.bicep \
-  -p sqlAdminPassword='<sql-password>'
-
-# Seed the database
-sqlcmd -S sql-zava.database.windows.net -U <SQL_USER> \
-  -P '<sql-password>' -d sqldb-zava -i infra/seed-database.sql
-```
-
-After deployment, verify:
-
-```bash
-curl https://app-zava.azurewebsites.net/health
-# → {"status":"healthy","database":"connected"}
-
-curl https://app-zava.azurewebsites.net/api/products
-# → [{"id":1,"name":"Zava UltraBoost Running Shoe",...}, ...]
-
-curl https://app-zava-warranty.azurewebsites.net/health
-# → {"status":"healthy"}
-```
+> **Note:** `srectl` (the SRE Agent CLI) has no winget/choco package today. Install it from the SRE Agent portal's **CLI** link. The repo works without it — the helper script falls back to validate-only mode.
 
 ---
 
-## Project Structure
+## Part 1 — Deploy the infrastructure
 
-```
-AzureFriday-SREAgent/
-├── infra/                          # Infrastructure-as-Code
-│   ├── main.bicep                  # All Azure resources (SQL, Apps, Monitoring)
-│   ├── main.bicepparam             # Default parameter values
-│   ├── deploy.ps1                  # One-click deployment script
-│   └── seed-database.sql           # Products, Orders, OrderItems seed data
-│
-├── src/                            # Main .NET 8 API (Zava storefront)
-│   ├── Program.cs                  # Minimal API: /health, /api/products
-│   ├── AzureFridayApp.csproj       # .NET project (SQL Client, App Insights)
-│   └── appsettings.json            # Connection string config
-│
-├── laptop-request-site/            # IT Portal (Node.js static site)
-│   ├── index.html                  # Laptop request form
-│   ├── server.js                   # Simple HTTP file server
-│   ├── style.css                   # Portal styling
-│   └── package.json                # Node project
-│
-├── warranty-tool/                  # Warranty Lookup API (Python standard library)
-│   ├── app.py                      # HTTP API: /warranty/{serial}, /devices
-│   ├── check_warranty.py           # Standalone CLI tool for SRE Agent
-│   ├── requirements.txt            # requests for standalone client
-│   └── startup.sh                  # App Service startup command
-│
-├── simulator/                      # Demo scenario simulator
-│   ├── demo.py                     # Interactive CLI with 5 scenarios
-│   └── requirements.txt            # rich, requests, pymssql
-│
-├── sre-config/                     # SRE Agent configuration (srectl)
-│   ├── agent1/                     # SQL & App Performance Agent
-│   │   ├── agents/
-│   │   │   ├── deployment-validator/       # Post-deploy health checks
-│   │   │   └── sql-performance-investigator/ # SQL perf analysis
-│   │   ├── hooks/
-│   │   │   ├── change-risk-assessor.yaml   # Assess risk before changes
-│   │   │   └── sql-write-guard.yaml        # Guard SQL write operations
-│   │   ├── skills/
-│   │   │   ├── sql-blocking-diagnosis/     # Diagnose blocking chains
-│   │   │   ├── sql-blocking-fix/           # Resolve blocking chains
-│   │   │   ├── sql-performance-fix/        # Fix slow queries (indexes)
-│   │   │   └── sql-query-diagnosis/        # Identify slow queries
-│   │   ├── tools/
-│   │   │   └── AssessChangeRisk/           # Risk assessment tool
-│   │   └── scheduledtasks/
-│   │       └── weekly-cost-report/         # Weekly cost analysis
-│   │
-│   └── agent2/                     # IT Support & ServiceNow Agent
-│       ├── agents/
-│       │   └── it-support-handler/         # Handle IT support requests
-│       └── tools/
-│           ├── CheckWarranty/              # Warranty lookup tool
-│           └── LookupServiceNowIncident/   # ServiceNow integration
-│
-├── dashboard.json                  # Azure Portal dashboard template
-├── .github/workflows/deploy.yml    # CI/CD pipeline with SRE Agent trigger
-└── .gitignore
-```
+The deployment is fully automated. Pick **one** of the two paths below.
 
----
+### Path A — Agent-driven (recommended)
 
-## Demo Scenarios
+Open [`deployment_plan.md`](deployment_plan.md) in VS Code and hand it to the assistant. It asks for **tenant ID + subscription ID only**, then executes Steps 1–11:
 
-### Scenario 1: Slow Query (Missing Index)
+1. `az login` to your tenant + subscription.
+2. Picks a region with App Service + SQL capacity.
+3. Generates a unique 6-char suffix (e.g. `a1b2c3`).
+4. Deploys `infra/main.bicep`.
+5. Seeds SQL (`infra/seed-database.sql`).
+6. Zip-deploys all three apps.
+7. Validates every resource + endpoint.
+8. Hands off to Part 2 below.
 
-| | |
-|---|---|
-| **What it demonstrates** | SRE Agent detects a performance degradation caused by a missing database index, diagnoses the root cause, and creates the index autonomously |
-| **SRE Agent features** | Azure Monitor alert → Agent activation, SQL MCP connector, `sql-query-diagnosis` skill, `sql-performance-fix` skill, `change-risk-assessor` hook, `sql-write-guard` hook |
+Watch the runbook output for your `Prefix` and `ResourceGroup` values — you'll reuse them in Parts 2–3.
 
-**Setup:**
-1. Ensure the database has the Products table populated (via `seed-database.sql`)
-2. DTU alert rule is configured (deployed automatically by Bicep)
-3. SRE Agent 1 has the SQL MCP connector with the database connection string
-
-**How to trigger:**
-```bash
-python simulator/demo.py
-# Select option 1: "Slow Query (Missing Index)"
-```
-
-The simulator drops any existing indexes on the `Products.Category` column, then fires rapid `SELECT ... WHERE Category = @cat` queries in a loop, driving DTU usage above 80%.
-
-**What to expect:**
-1. The simulator shows live query latency (typically 800–2000ms per query)
-2. Azure Monitor fires the DTU > 80% alert (~2-5 minutes)
-3. SRE Agent 1 activates, connects via SQL MCP, identifies the missing index
-4. The `change-risk-assessor` hook evaluates the proposed `CREATE INDEX` statement
-5. The `sql-write-guard` hook approves the DDL change
-6. SRE Agent creates the index: `CREATE NONCLUSTERED INDEX IX_Products_Category ON Products(Category)`
-7. The simulator detects the index and shows a before/after performance graph
-8. Query latency drops from ~1000ms to ~5ms (99%+ improvement)
-
----
-
-### Scenario 2: Blocking Chain
-
-| | |
-|---|---|
-| **What it demonstrates** | SRE Agent detects and resolves a SQL blocking chain (transaction deadlock) |
-| **SRE Agent features** | `sql-blocking-diagnosis` skill, `sql-blocking-fix` skill, SQL MCP |
-
-**Setup:**
-- Same SQL MCP setup as Scenario 1
-
-**How to trigger:**
-```bash
-python simulator/demo.py
-# Select option 2: "Blocking Chain"
-```
-
-The simulator opens a long-running transaction that holds locks on the Orders table, then fires concurrent queries that get blocked.
-
-**What to expect:**
-1. The simulator opens a transaction with `BEGIN TRAN` + `UPDATE Orders` + `WAITFOR DELAY`
-2. Subsequent queries to the Orders table are blocked
-3. SRE Agent detects the blocking chain via `sys.dm_exec_requests` and `sys.dm_tran_locks`
-4. Agent identifies the blocking session and either kills it or waits for it to complete
-5. Blocked queries resume execution
-
----
-
-### Scenario 3: Bad Deployment
-
-| | |
-|---|---|
-| **What it demonstrates** | SRE Agent validates a deployment post-push and investigates failures |
-| **SRE Agent features** | GitHub Actions HTTP trigger, `deployment-validator` extended agent, GitHub MCP connector, health endpoint monitoring |
-
-**Setup:**
-1. Configure the GitHub Actions workflow (`.github/workflows/deploy.yml`)
-2. SRE Agent 1 must have an HTTP trigger configured
-3. GitHub MCP connector must be set up with a PAT
-
-**How to trigger:**
-
-*Option A — Via GitHub Actions:*
-```bash
-# Trigger the workflow with force_failure=true
-gh workflow run deploy.yml -f force_failure=true
-```
-
-*Option B — Via the simulator:*
-```bash
-python simulator/demo.py
-# Select option 3: "Bad Deployment"
-```
-
-The simulator stops the app service, causing health checks to fail.
-
-**What to expect:**
-1. The deployment fails or the app health check returns HTTP 503
-2. GitHub Actions sends an HTTP trigger to the SRE Agent with deployment metadata
-3. The `deployment-validator` agent activates
-4. Agent hits `/health`, sees the failure, and investigates via GitHub MCP
-5. Agent checks the commit diff, identifies the issue, and reports findings
-6. If the app was stopped, the agent restarts it and confirms health
-
----
-
-### Scenario 4: ServiceNow Integration
-
-| | |
-|---|---|
-| **What it demonstrates** | SRE Agent handles an IT support request by looking up warranty status and creating/updating ServiceNow incidents |
-| **SRE Agent features** | `it-support-handler` extended agent, `CheckWarranty` tool, `LookupServiceNowIncident` tool, ServiceNow API integration |
-
-**Setup:**
-1. Create a ServiceNow Personal Developer Instance (PDI) at [developer.servicenow.com](https://developer.servicenow.com/)
-2. Configure the ServiceNow URL, username, and password in the simulator env vars
-3. SRE Agent 2 must have the `CheckWarranty` and `LookupServiceNowIncident` tools
-
-**How to trigger:**
-```bash
-python simulator/demo.py
-# Select option 4: "ServiceNow Integration"
-```
-
-The simulator creates a ServiceNow incident for a laptop warranty issue, then triggers SRE Agent 2.
-
-**What to expect:**
-1. The simulator creates an INC ticket in ServiceNow
-2. SRE Agent 2 activates, looks up the incident via `LookupServiceNowIncident`
-3. Agent calls `CheckWarranty` with the laptop serial number
-4. The warranty API returns status (active/expired, replacement eligibility)
-5. Agent updates the ServiceNow incident with warranty details and recommendation
-
----
-
-### Scenario 5: Reset All
-
-| | |
-|---|---|
-| **What it demonstrates** | Cleans up all demo scenarios — drops indexes, kills blocking sessions, restarts apps |
-
-```bash
-python simulator/demo.py
-# Select option 5: "Reset All"
-```
-
----
-
-## SRE Agent Configuration
-
-### Step 1: Create Agents at sre.azure.com
-
-1. Navigate to [https://sre.azure.com](https://sre.azure.com)
-2. Click **"Create Agent"**
-3. Create **Agent 1 — SQL & App Performance:**
-   - Name: `zava-sreagent-1`
-   - Attach to resource group: `rg-zava`
-   - Description: "Monitors SQL performance, handles deployments, manages app health"
-4. Create **Agent 2 — IT Support & ServiceNow:**
-   - Name: `zava-sreagent-2`
-   - Attach to resource group: `rg-zava`
-   - Description: "Handles IT support tickets, warranty lookups, ServiceNow integration"
-
-### Step 2: Configure MCP Connectors
-
-See [MCP Connector Setup](#mcp-connector-setup) below.
-
-### Step 3: Apply Skills, Hooks, and Agents via srectl
-
-```bash
-# Install srectl (if not already installed)
-# See https://learn.microsoft.com/azure/sre-agent for install instructions
-
-# Select Agent 1 context
-srectl config set-context <agent-1-id>
-
-# Apply all Agent 1 configurations
-srectl apply -f sre-config/agent1/skills/
-srectl apply -f sre-config/agent1/hooks/
-srectl apply -f sre-config/agent1/agents/
-srectl apply -f sre-config/agent1/tools/
-srectl apply -f sre-config/agent1/scheduledtasks/
-
-# Switch to Agent 2
-srectl config set-context <agent-2-id>
-
-# Apply Agent 2 configurations
-srectl apply -f sre-config/agent2/agents/
-srectl apply -f sre-config/agent2/tools/
-```
-
-### Step 4: Set Up Incident Handlers and HTTP Triggers
-
-**HTTP Trigger (for GitHub Actions):**
-1. In the SRE Agent portal, go to Agent 1 → Triggers
-2. Create a new HTTP trigger
-3. Copy the trigger URL into `.github/workflows/deploy.yml` (line 79)
-
-**Alert Handler (for Azure Monitor):**
-1. In the SRE Agent portal, go to Agent 1 → Alert Handlers
-2. Link the DTU, HTTP 5xx, and Health Check alert rules
-3. SRE Agent will automatically activate when these alerts fire
-
----
-
-## MCP Connector Setup
-
-### SQL MCP Connector (Agent 1)
-
-The SQL MCP connector allows SRE Agent to query and modify the SQL database.
-
-1. In SRE Agent portal → Agent 1 → Tools → Add MCP Connector
-2. Package: `mssql-mcp@latest`
-3. Environment variables:
-
-| Variable | Value |
-|----------|-------|
-| `MSSQL_CONNECTION_STRING` | `Server=tcp:sql-zava.database.windows.net,1433;Database=sqldb-zava;User ID=<SQL_USER>;Password=<your-password>;Encrypt=True;TrustServerCertificate=False;` |
-
-### GitHub MCP Connector (Agent 1)
-
-The GitHub MCP connector allows SRE Agent to inspect repositories, commits, and pull requests.
-
-1. Create a GitHub Personal Access Token (PAT):
-   - Go to [github.com/settings/tokens](https://github.com/settings/tokens)
-   - Create a fine-grained token with `repo` read access to your fork
-2. In SRE Agent portal → Agent 1 → Tools → Add MCP Connector
-3. Package: `@github/github-mcp-server`
-4. Environment variables:
-
-| Variable | Value |
-|----------|-------|
-| `GITHUB_PERSONAL_ACCESS_TOKEN` | `<github-pat>` |
-
----
-
-## ServiceNow PDI Setup
-
-### Get a Free Instance
-
-1. Go to [developer.servicenow.com](https://developer.servicenow.com/)
-2. Sign up for a free account
-3. Click **"Start Building"** → **"Request Instance"**
-4. Wait for the instance to provision (typically 5–10 minutes)
-5. Note your instance URL (e.g., `https://dev123456.service-now.com`)
-
-### Configure for the Demo
-
-Set environment variables before running the simulator:
+### Path B — Run the script directly
 
 ```powershell
-$env:ZAVA_SN_URL  = "https://dev123456.service-now.com"
-$env:ZAVA_SN_USER = "admin"
-$env:ZAVA_SN_PASS = "your-instance-password"
+$Suffix = -join ((48..57) + (97..102) | Get-Random -Count 6 | ForEach-Object { [char]$_ })
+$Prefix = "zava-$Suffix"
+$ResourceGroup = "rg-$Prefix"
+
+az login --tenant <tenant-id>
+az account set --subscription <subscription-id>
+az group create -n $ResourceGroup -l centralus
+
+./infra/deploy.ps1 -ResourceGroup $ResourceGroup -Location centralus -Prefix $Prefix
 ```
 
-### Create Test Tickets
+`deploy.ps1` generates a random SQL admin password, deploys Bicep, seeds SQL, zip-deploys the apps, and prints the SQL connection-string template at the end. **Capture that output** — you need the password for Part 2.
 
-The simulator (Scenario 4) creates incidents automatically. To create them manually:
+### Verify
 
-1. Log into your ServiceNow instance
-2. Navigate to **Incident → Create New**
-3. Fill in:
-   - Short Description: `Laptop replacement request — warranty expired`
-   - Category: `Hardware`
-   - Urgency: `Medium`
-   - Description: `Employee SN-2021-DEL-3344 laptop warranty has expired. Requesting replacement.`
+```powershell
+curl "https://app-$Prefix.azurewebsites.net/health"            # → {"status":"healthy",...}
+curl "https://app-$Prefix.azurewebsites.net/api/products"      # → [{"id":1,...}, ...]
+curl "https://app-$Prefix-warranty.azurewebsites.net/health"   # → {"status":"healthy"}
+```
 
 ---
 
-## Simulator Usage
+## Part 2 — Create the SRE Agent (portal step)
 
-```bash
-# Install dependencies
+Azure SRE Agent has **no ARM / Bicep / `az` creation path** today. You'll create it in the portal and attach it to the resource group you just deployed.
+
+### Step 1 — Create Agent 1 (covers Scenarios 1–3)
+
+1. Browse to **<https://sre.azure.com>**.
+2. Click **Create Agent**.
+3. Fill in:
+   - **Name:** `zava-sreagent-1`
+   - **Subscription:** the one used in Part 1
+   - **Resource group:** `rg-zava-<suffix>` (from Part 1)
+   - **Description:** `Monitors SQL performance, validates deployments`
+4. Click **Create** and wait ~30 s.
+5. Copy the **Agent ID** shown after provisioning — you need it in Step 5.
+
+### Step 2 — Attach the SQL MCP connector (required for Scenarios 1 & 2)
+
+In the agent's **Tools → MCP Connectors** blade:
+
+| Field | Value |
+|-------|-------|
+| Package | `mssql-mcp@latest` |
+| Env var `MSSQL_CONNECTION_STRING` | `Server=tcp:sql-<prefix>.database.windows.net,1433;Database=sqldb-<prefix>;User ID=sqladmin;Password=<the password from Part 1>;Encrypt=True;` |
+
+Click **Test connection** — it should report "Connected".
+
+### Step 3 — Attach the GitHub MCP connector (optional, Scenario 3)
+
+| Field | Value |
+|-------|-------|
+| Package | `@github/github-mcp-server` |
+| Env var `GITHUB_PERSONAL_ACCESS_TOKEN` | fine-grained PAT, `repo` read on this fork |
+
+### Step 4 — Wire alert handlers (Scenarios 1 & 2)
+
+In the agent's **Alert Handlers** blade, link these three rules from `rg-zava-<suffix>`:
+
+- `alert-<prefix>-dtu-high`
+- `alert-<prefix>-http-5xx`
+- `alert-<prefix>-health-check`
+
+The agent now activates automatically when any of them fires.
+
+### Step 5 — Create the HTTP trigger (Scenario 3)
+
+In the agent's **Triggers** blade:
+
+1. **Create HTTP trigger**, name it `bad-deployment`.
+2. Copy the **Trigger URL** and **Audience** — you'll set them as env vars in Part 3.
+
+### Step 6 — Apply the skills, hooks, and agents from this repo
+
+The `sre-config/agent1/` folder ships the skills (`sql-query-diagnosis`, `sql-blocking-fix`, …), hooks (`change-risk-assessor`, `sql-write-guard`), and the `deployment-validator` agent. Apply them via the helper script:
+
+```powershell
+./sre-config/setup-scenarios-1-3.ps1 `
+  -ResourceGroup $ResourceGroup `
+  -Prefix $Prefix `
+  -SreAgent1Id "<agent-id-from-step-1>" `
+  -HttpTriggerUrl "<trigger-url-from-step-5>"
+```
+
+- If `srectl` is installed, it applies everything.
+- If not, the script validates the workload and prints the exact `srectl apply` commands for later.
+
+---
+
+## Part 3 — Run the demos
+
+Each scenario is one command. Watch the activity feed at <https://sre.azure.com> while it runs.
+
+### One-time simulator setup
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r simulator/requirements.txt
 
-# Run interactive menu
-python simulator/demo.py
+# Reuse $Prefix / $ResourceGroup from Part 1
+$env:ZAVA_RESOURCE_GROUP = $ResourceGroup
+$env:ZAVA_SQL_SERVER     = "sql-$Prefix.database.windows.net"
+$env:ZAVA_SQL_DATABASE   = "sqldb-$Prefix"
+$env:ZAVA_SQL_USER       = "sqladmin"
+$env:ZAVA_SQL_PASSWORD   = "<sql password from Part 1>"
+$env:ZAVA_APP_NAME       = "app-$Prefix"
+$env:ZAVA_APP_URL        = "https://app-$Prefix.azurewebsites.net"
+$env:ZAVA_DTU_ALERT_NAME = "alert-$Prefix-dtu-high"
 
-# Direct scenario launch
-python simulator/demo.py 1    # Slow Query (Missing Index)
-python simulator/demo.py 2    # Blocking Chain
-python simulator/demo.py 3    # Bad Deployment
-python simulator/demo.py 4    # ServiceNow Integration
-python simulator/demo.py 5    # Reset All
-```
-
-### Environment Variables
-
-Override defaults by setting environment variables:
-
-```powershell
-$env:ZAVA_SQL_SERVER   = "sql-zava.database.windows.net"
-$env:ZAVA_SQL_DATABASE = "sqldb-zava"
-$env:ZAVA_SQL_USER     = "<SQL_USER>"
-$env:ZAVA_SQL_PASSWORD = "<sql-password>"
-$env:ZAVA_APP_URL      = "https://app-zava.azurewebsites.net"
-$env:ZAVA_SN_URL       = "https://dev123456.service-now.com"
-$env:ZAVA_SN_USER      = "admin"
-$env:ZAVA_SN_PASS      = "your-password"
+# Scenario 3 only:
+$env:ZAVA_SRE_HTTP_TRIGGER_URL      = "<trigger-url-from-Part-2-step-5>"
+$env:ZAVA_SRE_HTTP_TRIGGER_AUDIENCE = "<audience-from-Part-2-step-5>"
 ```
 
 ---
 
-## Resource Links
+### Scenario 1 — Slow Query (missing index)
 
-After deployment, bookmark these:
+**What breaks.** Simulator drops every index on `Products.Category`, then hammers `SELECT … WHERE Category = @c` until DTU > 80%.
+
+**What the agent does.** DTU alert fires → SRE Agent connects via SQL MCP → `sql-query-diagnosis` finds the missing index → `change-risk-assessor` and `sql-write-guard` approve the DDL → `sql-performance-fix` runs `CREATE NONCLUSTERED INDEX IX_Products_Category`.
+
+**Run:**
+
+```powershell
+python simulator/demo.py 1
+```
+
+**Watch for (2–5 min):**
+
+1. Simulator shows query latency ~800–2000 ms.
+2. Azure Portal → Monitor → Alerts: `alert-<prefix>-dtu-high` fires.
+3. SRE Agent activity feed shows skills running.
+4. Simulator detects `IX_Products_Category` and prints before/after.
+5. Latency drops to ~5 ms.
+
+---
+
+### Scenario 2 — Blocking Chain
+
+**What breaks.** Simulator opens `BEGIN TRAN` + `UPDATE Orders` + `WAITFOR DELAY`, holding locks while concurrent reads pile up behind it.
+
+**What the agent does.** SRE Agent polls `sys.dm_exec_requests` / `sys.dm_tran_locks` via SQL MCP → `sql-blocking-diagnosis` identifies the head blocker → `sql-blocking-fix` kills the offending SPID after risk approval.
+
+**Run:**
+
+```powershell
+python simulator/demo.py 2
+```
+
+**Watch for:**
+
+1. Simulator reports blocked queries.
+2. SRE Agent shows the wait chain and head SPID.
+3. Agent kills the head blocker.
+4. Blocked queries resume in seconds.
+
+---
+
+### Scenario 3 — Bad Deployment
+
+**Prerequisite:** `ZAVA_SRE_HTTP_TRIGGER_URL` and `ZAVA_SRE_HTTP_TRIGGER_AUDIENCE` env vars set (from Part 2 Step 5).
+
+**What breaks.** Simulator overwrites the App Service `ConnectionStrings__DefaultConnection` setting with a bad SQL server name and restarts the app. `/health` returns 503.
+
+**What the agent does.** Simulator posts to the HTTP trigger → SRE Agent runs `deployment-validator` → it hits `/health`, sees 503 → (optional) inspects recent commits via GitHub MCP → restores the working connection string → restarts the app → confirms `/health` returns 200.
+
+**Run:**
+
+```powershell
+python simulator/demo.py 3
+# At the prompt press [b] to break the config, then watch.
+```
+
+**Watch for:**
+
+1. App health → 503.
+2. SRE Agent activity feed shows `deployment-validator` running.
+3. Agent restores the connection string and restarts the app.
+4. App health → 200.
+
+---
+
+## Optional — Scenario 4 (ServiceNow Integration)
+
+Requires a free [ServiceNow PDI](https://developer.servicenow.com/) plus a second SRE Agent.
+
+1. Create **Agent 2** at <https://sre.azure.com>, name `zava-sreagent-2`, attach to the same `rg-zava-<suffix>`.
+2. Apply Agent 2 config:
+
+   ```powershell
+   srectl config set-context <agent-2-id>
+   srectl apply -f sre-config/agent2/agents/
+   srectl apply -f sre-config/agent2/tools/
+   ```
+
+3. Set ServiceNow env vars and run `python simulator/demo.py 4`:
+
+   ```powershell
+   $env:ZAVA_SN_URL  = "https://dev123456.service-now.com"
+   $env:ZAVA_SN_USER = "admin"
+   $env:ZAVA_SN_PASS = "<your instance password>"
+   ```
+
+---
+
+## Resource links
+
+After Part 1 finishes, bookmark:
 
 | Resource | URL |
 |----------|-----|
-| **Main App** | `https://app-zava.azurewebsites.net` |
-| **IT Portal** | `https://app-zava-itportal.azurewebsites.net` |
-| **Warranty API** | `https://app-zava-warranty.azurewebsites.net` |
-| **Azure Portal** | `https://portal.azure.com` → resource group `rg-zava` |
-| **SRE Agent Portal** | `https://sre.azure.com` |
-| **Dashboard** | Azure Portal → search "Zava Operations Dashboard" |
-| **App Insights** | Azure Portal → `ai-zava` |
-| **SQL Database** | Azure Portal → `sql-zava` / `sqldb-zava` |
+| Main app | `https://app-<prefix>.azurewebsites.net` |
+| IT portal | `https://app-<prefix>-itportal.azurewebsites.net` |
+| Warranty API | `https://app-<prefix>-warranty.azurewebsites.net` |
+| Azure Portal | <https://portal.azure.com> → `rg-zava-<suffix>` |
+| SRE Agent Portal | <https://sre.azure.com> |
+| Dashboard | Azure Portal → search "Zava Operations Dashboard" |
 
 ---
 
 ## Troubleshooting
 
-### MCP Connection Issues
+**DTU alert doesn't fire in Scenario 1**
+Basic 5 DTU has tight headroom but the alert needs ~2–5 min of sustained load. Check Azure Portal → Monitor → Alerts. Re-run the simulator and let it run longer.
 
-**Problem:** SRE Agent can't connect to SQL via MCP.
+**Simulator can't reach SQL**
+Add your client IP to the SQL firewall:
+```powershell
+$myIp = (Invoke-WebRequest https://api.ipify.org).Content
+az sql server firewall-rule create -g $ResourceGroup -s "sql-$Prefix" -n MyIP --start-ip-address $myIp --end-ip-address $myIp
+```
 
-- Verify the connection string in the MCP connector environment variables
-- Ensure the SQL firewall rule allows Azure services (`0.0.0.0`)
-- Test the connection manually:
-  ```bash
-  sqlcmd -S sql-zava.database.windows.net -U <SQL_USER> -P 'password' -d sqldb-zava -Q "SELECT 1"
-  ```
+**SRE Agent doesn't activate on an alert**
+Confirm the MCP connector status is **Connected**, the alert handler is linked to the right alert rule, and that `setup-scenarios-1-3.ps1` reported success applying skills/hooks/agents.
 
-**Problem:** GitHub MCP connector fails.
+**`srectl` not found**
+Install it from the **CLI** link in the SRE Agent portal. No winget/choco package today. The setup script still validates the deployment and prints the commands to apply later.
 
-- Verify the PAT hasn't expired
-- Ensure the PAT has `repo` read permissions
-- Test: `curl -H "Authorization: token <github-pat>" https://api.github.com/user`
-
-### SQL Auth vs Entra Auth
-
-The Bicep template configures **SQL authentication** (username/password) for simplicity. The `appsettings.json` in the source code references **Managed Identity** auth — the deployment script overrides this with the SQL connection string via App Service settings.
-
-If you prefer Entra (AAD) auth:
-1. Enable Entra admin on the SQL server
-2. Assign a managed identity to the App Service
-3. Update the connection string to use `Authentication=Active Directory Managed Identity`
-
-### App Service Quota
-
-**Problem:** `Conflict: Cannot create more than N App Service plans in region.`
-
-- Free/shared tier App Service plans have quota limits per region
-- Delete unused App Service plans, or use a different region
-- The B1 plan supports up to 3 apps (all 3 Zava apps share one plan)
-
-### Alert Not Firing
-
-**Problem:** DTU alert doesn't fire during Scenario 1.
-
-- The Basic 5 DTU tier has very low headroom — alerts typically fire within 2–5 minutes
-- Check Azure Monitor → Alerts → look for "alert-zava-dtu-high"
-- Verify the alert rule is enabled: Azure Portal → Alerts → Alert Rules
-- If the simulator queries complete too fast, the DTU spike may be insufficient. Run the simulator longer.
-- Check the evaluation window: the alert uses a 5-minute window with 1-minute frequency
-
-### Simulator Can't Connect to SQL
-
-- Install `pymssql`: `pip install pymssql`
-- Ensure your client IP is in the SQL firewall rules:
-  ```bash
-  az sql server firewall-rule create -g rg-zava -s sql-zava \
-    -n MyIP --start-ip-address <your-ip> --end-ip-address <your-ip>
-  ```
+**Connection string drift after Scenario 3**
+If Scenario 3 leaves the app broken, restore it manually:
+```powershell
+az webapp config connection-string set -g $ResourceGroup -n "app-$Prefix" `
+  --connection-string-type SQLAzure `
+  --settings DefaultConnection="<correct connection string from Bicep output>"
+az webapp restart -g $ResourceGroup -n "app-$Prefix"
+```
 
 ---
 
-## Cost Estimate
+## Cleanup
 
-All resources use the lowest production-capable SKUs:
+```powershell
+az group delete -n $ResourceGroup --yes --no-wait
+```
 
-| Resource | SKU | Monthly Cost |
+Tears down all Azure resources. Delete the SRE Agent separately from <https://sre.azure.com> if you also want it gone.
+
+---
+
+## Cost
+
+| Resource | SKU | Approx / mo |
 |----------|-----|-------------|
-| SQL Database | Basic (5 DTU) | ~$5 |
-| App Service Plan | B1 (shared by 3 apps) | ~$13 |
-| Log Analytics | Pay-per-GB (free tier: 5GB) | ~$0 |
-| Application Insights | Included with Log Analytics | ~$0 |
-| Azure Monitor Alerts | Free tier (10 alert rules) | ~$0 |
-| **Total** | | **~$18/month** |
+| Azure SQL DB | Basic 5 DTU | $5 |
+| App Service Plan | S2 Standard (3 apps share it) | $73 |
+| Log Analytics + App Insights | Pay-as-you-go, 5 GB free | $0 |
+| Azure Monitor alerts | Free tier | $0 |
+| **Total** | | **~$78/mo** |
 
-> 💡 **Tip:** Delete the resource group when not in use to stop all charges:
-> ```bash
-> az group delete -n rg-zava --yes --no-wait
-> ```
+Delete the resource group right after the demo to keep the cost to a few cents.
+
+---
+
+## Repo layout
+
+```
+infra/                Bicep + deploy.ps1 + seed-database.sql
+src/                  .NET 8 storefront API
+laptop-request-site/  Node 20 IT portal
+warranty-tool/        Python warranty API
+simulator/            demo.py — scenario driver
+sre-config/           SRE Agent skills, hooks, agents, helper script
+  agent1/             SQL & deployment (Scenarios 1–3)
+  agent2/             IT support & ServiceNow (Scenario 4)
+deployment_plan.md    Generic agent-driven deployment runbook
+dashboard.json        Azure Portal dashboard template
+```
 
 ---
 
 ## License
 
-This project is for demonstration purposes as part of Azure Friday.
+Demonstration use only. Built for the Azure Friday show.

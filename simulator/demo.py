@@ -70,6 +70,11 @@ ALERT_NAME     = os.environ.get("ZAVA_DTU_ALERT_NAME", "alert-zava-dtu-high")
 
 APP_URL      = os.environ.get("ZAVA_APP_URL",      "https://app-zava.azurewebsites.net")
 HEALTH_URL   = f"{APP_URL}/health"
+APP_NAME     = os.environ.get("ZAVA_APP_NAME", APP_URL.replace("https://", "").split(".")[0])
+SRE_HTTP_TRIGGER_URL = os.environ.get("ZAVA_SRE_HTTP_TRIGGER_URL", "").strip()
+SRE_HTTP_TRIGGER_AUDIENCE = os.environ.get("ZAVA_SRE_HTTP_TRIGGER_AUDIENCE", "59f0a04a-b322-4310-adc9-39ac41e9631e")
+GH_REPO      = os.environ.get("ZAVA_GH_REPO", "meetshamir/AzureFriday-SREAgent")
+GH_ACTOR     = os.environ.get("ZAVA_GH_ACTOR", "meetshamir")
 
 SN_URL       = os.environ.get("ZAVA_SN_URL",  "https://<SN_INSTANCE>.service-now.com")
 SN_USER      = os.environ.get("ZAVA_SN_USER", "admin")
@@ -377,6 +382,61 @@ def health_check():
         return r.status_code, r.elapsed.total_seconds() * 1000, r.text[:200]
     except Exception as e:
         return 0, 0, str(e)[:200]
+
+
+def _az_connection_string(sql_server: str) -> str:
+    return (
+        f"Server=tcp:{sql_server},1433;"
+        f"Database={SQL_DATABASE};"
+        f"User Id={SQL_USER};"
+        f"Password={SQL_PASSWORD};"
+        "Encrypt=True;TrustServerCertificate=True;"
+    )
+
+
+def _set_app_connection_string(sql_server: str):
+    subprocess.run(
+        [
+            "az", "webapp", "config", "connection-string", "set",
+            "--name", APP_NAME,
+            "--resource-group", RESOURCE_GROUP,
+            "--connection-string-type", "SQLAzure",
+            "--settings", f"DefaultConnection={_az_connection_string(sql_server)}",
+            "--output", "none",
+        ],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _restart_app():
+    subprocess.run(
+        ["az", "webapp", "restart", "--name", APP_NAME, "--resource-group", RESOURCE_GROUP, "--output", "none"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _post_sre_http_trigger(payload: dict, timeline=None):
+    if not SRE_HTTP_TRIGGER_URL:
+        message = "SRE HTTP trigger not configured. Set ZAVA_SRE_HTTP_TRIGGER_URL after creating the Agent 1 HTTP trigger."
+        if timeline:
+            timeline.add(message, "yellow")
+        return None
+
+    token = subprocess.run(
+        ["az", "account", "get-access-token", "--resource", SRE_HTTP_TRIGGER_AUDIENCE, "--query", "accessToken", "-o", "tsv"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    ).stdout.strip()
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return req.post(SRE_HTTP_TRIGGER_URL, json=payload, headers=headers, timeout=10)
 
 
 def _wait_key():
@@ -972,30 +1032,7 @@ def scenario_blocking():
 # SCENARIO 3 — Bad Deployment
 # ═══════════════════════════════════════════════════════════
 
-_AZ_CONN_CMD_GOOD = (
-    'az webapp config connection-string set '
-    '--name app-zava --resource-group rg-zava '
-    '--connection-string-type SQLAzure '
-    '--settings "DefaultConnection=Server=sql-zava.database.windows.net;'
-    'Database=sqldb-zava;User Id=<SQL_ADMIN_USER>;Password=<SQL_PASSWORD>;'
-    'Encrypt=True;TrustServerCertificate=True;" '
-    '-o none 2>&1'
-)
-
-_AZ_CONN_CMD_BAD = (
-    'az webapp config connection-string set '
-    '--name app-zava --resource-group rg-zava '
-    '--connection-string-type SQLAzure '
-    '--settings "DefaultConnection=Server=sql-zava-WRONG.database.windows.net;'
-    'Database=sqldb-zava;User Id=<SQL_ADMIN_USER>;Password=<SQL_PASSWORD>;'
-    'Encrypt=True;TrustServerCertificate=True;" '
-    '-o none 2>&1'
-)
-
-_WEBHOOK_URL = (
-    "https://zava-sreagent-1--<AGENT_HASH>.eastus2.azuresre.ai"
-    "/api/v1/httptriggers/trigger/<HTTP_TRIGGER_ID>"
-)
+_BAD_SQL_SERVER = os.environ.get("ZAVA_BAD_SQL_SERVER", SQL_SERVER.replace(".database.windows.net", "-WRONG.database.windows.net"))
 
 
 def scenario_bad_deployment():
@@ -1020,7 +1057,7 @@ def scenario_bad_deployment():
 
     # Ensure app is healthy first
     console.print("[yellow]Ensuring app is healthy before simulation...[/]")
-    os.system(_AZ_CONN_CMD_GOOD)
+    _set_app_connection_string(SQL_SERVER)
     time.sleep(3)
     code, ms, body = health_check()
     if code == 200:
@@ -1040,7 +1077,7 @@ def scenario_bad_deployment():
                 if key == "b" and not broken:
                     timeline.add("⌨️  Key [b] pressed — deploying bad config...", "yellow bold")
                     live.update(Panel("[yellow bold]⏳ Deploying bad config... please wait[/]", border_style="yellow", width=76))
-                    os.system(_AZ_CONN_CMD_BAD)
+                    _set_app_connection_string(_BAD_SQL_SERVER)
                     broken = True
                     was_broken = True
                     seen_down = False
@@ -1055,37 +1092,32 @@ def scenario_bad_deployment():
                             break
                     if not seen_down:
                         timeline.add("⚠ App still responding 200 — restarting to force config reload", "yellow")
-                        os.system("az webapp restart --name app-zava --resource-group rg-zava -o none 2>&1")
+                        _restart_app()
                         time.sleep(10)
 
                     timeline.add("📡 Firing HTTP trigger to SRE Agent...", "cyan")
                     # Fire webhook with auth token
                     try:
-                        import subprocess
-                        token = subprocess.run(
-                            "az account get-access-token --resource 59f0a04a-b322-4310-adc9-39ac41e9631e --query accessToken -o tsv",
-                            capture_output=True, text=True, timeout=15, shell=True
-                        ).stdout.strip()
                         payload = {
                             "source": "simulator",
                             "event": "deployment_completed",
-                            "repo": "<GH_USER>/Zava",
-                            "app_name": "app-zava",
+                            "repo": GH_REPO,
+                            "app_name": APP_NAME,
                             "app_url": APP_URL,
                             "health_endpoint": HEALTH_URL,
                             "status": "deployed",
                             "message": "Bad config deployed — DB connection string changed to sql-zava-WRONG. Health check is failing. Please investigate and fix.",
                         }
-                        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-                        r = req.post(_WEBHOOK_URL, json=payload, headers=headers, timeout=10)
-                        timeline.add(f"SRE Agent notified (HTTP {r.status_code})", "cyan")
+                        r = _post_sre_http_trigger(payload, timeline)
+                        if r is not None:
+                            timeline.add(f"SRE Agent notified (HTTP {r.status_code})", "cyan")
                     except Exception as e:
                         timeline.add(f"Webhook failed: {str(e)[:50]}", "red")
 
                 if key == "f":
                     timeline.add("⌨️  Key [f] pressed — restoring good config...", "yellow bold")
                     live.update(Panel("[yellow bold]⏳ Restoring good config... please wait[/]", border_style="yellow", width=76))
-                    os.system(_AZ_CONN_CMD_GOOD)
+                    _set_app_connection_string(SQL_SERVER)
 
                 code, ms, body = health_check()
                 healthy = code == 200
@@ -1435,13 +1467,11 @@ def scenario_reset():
                     console.print(" [red]❌ no connection[/]")
 
             elif tag == "conn":
-                rc = os.system(_AZ_CONN_CMD_GOOD)
-                console.print(
-                    " [green]✅[/]" if rc == 0 else " [yellow]⚠ check az cli[/]"
-                )
+                _set_app_connection_string(SQL_SERVER)
+                console.print(" [green]✅[/]")
 
             elif tag == "restart":
-                os.system("az webapp restart --name app-zava --resource-group rg-zava -o none 2>&1")
+                _restart_app()
                 console.print(" [green]✅[/]")
 
             elif tag == "health":
@@ -1489,12 +1519,6 @@ def scenario_all():
 # SCENARIO 6 — GitHub Actions Deployment
 # ═══════════════════════════════════════════════════════════
 
-_GH_WEBHOOK_URL = (
-    "https://zava-sreagent-1--<AGENT_HASH>.eastus2.azuresre.ai"
-    "/api/v1/httptriggers/trigger/<HTTP_TRIGGER_ID>"
-)
-
-_GH_REPO = "meetshamir/AzureFriday-SREAgent"
 _GH_TOKEN = os.environ.get("ZAVA_GH_TOKEN", "")
 
 
@@ -1555,7 +1579,7 @@ def scenario_gh_deployment():
                     for attempt in range(60):  # wait up to 5 mins
                         time.sleep(5)
                         try:
-                            r = req.get(f"https://api.github.com/repos/{_GH_REPO}/actions/runs?per_page=1", headers=gh_headers, timeout=10)
+                            r = req.get(f"https://api.github.com/repos/{GH_REPO}/actions/runs?per_page=1", headers=gh_headers, timeout=10)
                             if r.status_code == 200:
                                 runs = r.json().get("workflow_runs", [])
                                 if runs:
@@ -1584,28 +1608,24 @@ def scenario_gh_deployment():
                     # Fire authenticated webhook to SRE Agent
                     timeline.add("📡 Firing HTTP trigger to SRE Agent...", "cyan bold")
                     try:
-                        token = subprocess.run(
-                            "az account get-access-token --resource 59f0a04a-b322-4310-adc9-39ac41e9631e --query accessToken -o tsv",
-                            capture_output=True, text=True, timeout=15, shell=True
-                        ).stdout.strip()
                         payload = {
                             "source": "github-actions",
                             "event": "deployment_completed",
-                            "repo": _GH_REPO,
+                            "repo": GH_REPO,
                             "commit_sha": "bad-config-commit",
                             "commit_message": "Update database connection string",
                             "branch": "main",
-                            "actor": "meetshamir",
-                            "app_name": "app-zava",
+                            "actor": GH_ACTOR,
+                            "app_name": APP_NAME,
                             "app_url": APP_URL,
                             "health_endpoint": HEALTH_URL,
-                            "run_url": gh_run_url or f"https://github.com/{_GH_REPO}/actions",
+                            "run_url": gh_run_url or f"https://github.com/{GH_REPO}/actions",
                             "status": "success",
                             "message": "Deployment succeeded but app health is failing. Investigate the latest commit.",
                         }
-                        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-                        r = req.post(_GH_WEBHOOK_URL, json=payload, headers=headers, timeout=10)
-                        timeline.add(f"✅ SRE Agent notified (HTTP {r.status_code})", "cyan")
+                        r = _post_sre_http_trigger(payload, timeline)
+                        if r is not None:
+                            timeline.add(f"✅ SRE Agent notified (HTTP {r.status_code})", "cyan")
                     except Exception as e:
                         timeline.add(f"Webhook failed: {str(e)[:50]}", "red")
 
@@ -1688,7 +1708,7 @@ def _push_bad_config():
         return
     headers = {"Authorization": f"token {_GH_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     bad_config = json.dumps({
-        "ConnectionStrings": {"DefaultConnection": "Server=sql-zava-WRONG.database.windows.net;Database=sqldb-zava;User Id=<SQL_ADMIN_USER>;Password=<SQL_PASSWORD>;Encrypt=True;TrustServerCertificate=True;"},
+        "ConnectionStrings": {"DefaultConnection": f"Server={_BAD_SQL_SERVER};Database={SQL_DATABASE};User Id=<SQL_ADMIN_USER>;Password=<SQL_PASSWORD>;Encrypt=True;TrustServerCertificate=True;"},
         "ApplicationInsights": {"ConnectionString": ""},
         "Logging": {"LogLevel": {"Default": "Information", "Microsoft.AspNetCore": "Warning"}},
         "AllowedHosts": "*"
@@ -1696,9 +1716,9 @@ def _push_bad_config():
     import base64
     content = base64.b64encode(bad_config.encode()).decode()
     try:
-        existing = req.get(f"https://api.github.com/repos/{_GH_REPO}/contents/src/appsettings.json", headers=headers, timeout=10).json()
+        existing = req.get(f"https://api.github.com/repos/{GH_REPO}/contents/src/appsettings.json", headers=headers, timeout=10).json()
         body = {"message": "Update database connection string", "content": content, "sha": existing["sha"]}
-        r = req.put(f"https://api.github.com/repos/{_GH_REPO}/contents/src/appsettings.json", headers=headers, json=body, timeout=10)
+        r = req.put(f"https://api.github.com/repos/{GH_REPO}/contents/src/appsettings.json", headers=headers, json=body, timeout=10)
         if r.status_code in (200, 201):
             console.print("[green]  ✅ Bad commit pushed to GitHub[/]")
         else:
@@ -1714,7 +1734,7 @@ def _restore_good_config():
         return
     headers = {"Authorization": f"token {_GH_TOKEN}", "Accept": "application/vnd.github.v3+json"}
     good_config = json.dumps({
-        "ConnectionStrings": {"DefaultConnection": "Server=sql-zava.database.windows.net;Database=sqldb-zava;User Id=<SQL_ADMIN_USER>;Password=<SQL_PASSWORD>;Encrypt=True;TrustServerCertificate=True;"},
+        "ConnectionStrings": {"DefaultConnection": f"Server={SQL_SERVER};Database={SQL_DATABASE};User Id=<SQL_ADMIN_USER>;Password=<SQL_PASSWORD>;Encrypt=True;TrustServerCertificate=True;"},
         "ApplicationInsights": {"ConnectionString": ""},
         "Logging": {"LogLevel": {"Default": "Information", "Microsoft.AspNetCore": "Warning"}},
         "AllowedHosts": "*"
@@ -1722,9 +1742,9 @@ def _restore_good_config():
     import base64
     content = base64.b64encode(good_config.encode()).decode()
     try:
-        existing = req.get(f"https://api.github.com/repos/{_GH_REPO}/contents/src/appsettings.json", headers=headers, timeout=10).json()
+        existing = req.get(f"https://api.github.com/repos/{GH_REPO}/contents/src/appsettings.json", headers=headers, timeout=10).json()
         body = {"message": "Restore correct database connection string", "content": content, "sha": existing["sha"]}
-        r = req.put(f"https://api.github.com/repos/{_GH_REPO}/contents/src/appsettings.json", headers=headers, json=body, timeout=10)
+        r = req.put(f"https://api.github.com/repos/{GH_REPO}/contents/src/appsettings.json", headers=headers, json=body, timeout=10)
     except Exception:
         pass
 

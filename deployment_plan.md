@@ -392,7 +392,15 @@ foreach ($App in @($MainApp, $ItPortal, $WarrantyApp)) {
 
 ## Step 12: SRE Agent Setup Handoff
 
-The Azure resources and simulator can be prepared from this repo. SRE Agent still needs portal/CLI setup.
+Scenarios 1-3 are not complete until Agent 1 exists in Azure SRE Agent and is connected to the deployed workload. The Bicep template creates the workload, alert rules, App Insights, and dashboard; it does not create the SRE Agent portal resource. Current discovery found no ARM/Bicep resource type for SRE Agent creation, so create/select Agent 1 in `https://sre.azure.com`, then use the repo script below to validate and apply config.
+
+Scenario 1-3 requirements:
+
+| Scenario | Required SRE Agent setup |
+| --- | --- |
+| 1. Slow Query | Agent 1, SQL MCP connector, DTU alert handler, SQL diagnosis/fix skills, change-risk and SQL write hooks. |
+| 2. Blocking Chain | Agent 1, SQL MCP connector, blocking diagnosis/fix skills, change-risk and SQL write hooks. |
+| 3. Bad Deployment | Agent 1 HTTP trigger and deployment-validator extended agent. GitHub MCP is optional for commit/PR/issue analysis. |
 
 Install or verify `srectl`:
 
@@ -400,18 +408,80 @@ Install or verify `srectl`:
 Get-Command srectl -ErrorAction SilentlyContinue
 ```
 
-If `srectl` is available, create/select the SRE agents in the SRE Agent portal first, then apply repo config:
+Create Agent 1 in `sre.azure.com`:
+
+```text
+Name: zava-sreagent-1 or zava-sreagent-<suffix>
+Resource group: <derived resource group>
+Purpose: SQL performance, blocking diagnosis, app health, deployment validation
+```
+
+Add the SQL MCP connector to Agent 1:
+
+```text
+Package: mssql-mcp@latest
+Environment variable: MSSQL_CONNECTION_STRING
+Value: Server=tcp:<sql-server>.database.windows.net,1433;Database=<sql-database>;User ID=sqladmin;Password=<secure-password>;Encrypt=True;TrustServerCertificate=False;
+```
+
+For Scenario 1, link Agent 1 to the deployed DTU alert rule:
 
 ```powershell
-# Agent 1: SQL and app performance
+$DtuAlertName
+```
+
+For Scenario 3, create an Agent 1 HTTP trigger and save the trigger URL only in your local shell/session:
+
+```powershell
+$env:ZAVA_SRE_HTTP_TRIGGER_URL = '<agent-1-http-trigger-url>'
+```
+
+If GitHub analysis is part of the Scenario 3 demo, add the GitHub MCP connector to Agent 1:
+
+```text
+Package: @github/github-mcp-server
+Environment variable: GITHUB_PERSONAL_ACCESS_TOKEN
+Value: <github-pat>
+```
+
+Apply and validate Agent 1 config for Scenarios 1-3:
+
+```powershell
+.\sre-config\setup-scenarios-1-3.ps1 `
+  -ResourceGroup $ResourceGroup `
+  -Prefix $Prefix `
+  -SreAgent1Id '<agent-1-id>' `
+  -HttpTriggerUrl $env:ZAVA_SRE_HTTP_TRIGGER_URL
+```
+
+The helper validates the deployed resources, prints connector values with placeholders instead of secrets, and applies these Agent 1 assets when `srectl` is available:
+
+```powershell
 srectl config set-context <agent-1-id>
 srectl apply -f sre-config/agent1/skills/
 srectl apply -f sre-config/agent1/hooks/
 srectl apply -f sre-config/agent1/agents/
 srectl apply -f sre-config/agent1/tools/
 srectl apply -f sre-config/agent1/scheduledtasks/
+```
 
-# Agent 2: IT support and warranty lookup
+Set local simulator variables for Scenarios 1-3:
+
+```powershell
+$env:ZAVA_RESOURCE_GROUP = $ResourceGroup
+$env:ZAVA_SQL_SERVER = "$SqlServer.database.windows.net"
+$env:ZAVA_SQL_DATABASE = $SqlDatabase
+$env:ZAVA_SQL_USER = 'sqladmin'
+$env:ZAVA_SQL_PASSWORD = $SqlPassword
+$env:ZAVA_APP_NAME = $MainApp
+$env:ZAVA_APP_URL = "https://$MainApp.azurewebsites.net"
+$env:ZAVA_DTU_ALERT_NAME = $DtuAlertName
+$env:ZAVA_SRE_HTTP_TRIGGER_URL = '<agent-1-http-trigger-url>'
+```
+
+Agent 2 is only needed for Scenario 4, which this runbook skips by default. If Scenario 4 is later enabled, create/select Agent 2 in the SRE Agent portal and apply its config:
+
+```powershell
 srectl config set-context <agent-2-id>
 srectl apply -f sre-config/agent2/agents/
 srectl apply -f sre-config/agent2/tools/
@@ -424,20 +494,6 @@ ZAVA_WARRANTY_API_URL=https://<warranty-app-name>.azurewebsites.net
 ```
 
 If tool environment variables are not supported, update the `WARRANTY_API_URL` value in the CheckWarranty tool during portal setup to the derived `$WarrantyUrl` for this deployment. Do not commit deployment-specific URLs back to the repo.
-
-Configure Agent 1 SQL MCP connector with this connection string shape:
-
-```text
-Server=tcp:<sql-server>.database.windows.net,1433;Database=<sql-database>;User ID=sqladmin;Password=<secure-password>;Encrypt=True;TrustServerCertificate=False;
-```
-
-Also configure Agent 1 GitHub MCP if running deployment-validation scenarios.
-
-Create/link alert handlers for deployed alert rules, including the derived DTU alert name:
-
-```powershell
-$DtuAlertName
-```
 
 Skip ServiceNow connector/setup unless scenario 4 is intentionally reintroduced.
 

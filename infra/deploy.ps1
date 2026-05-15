@@ -44,6 +44,7 @@
     .\deploy.ps1 -SkipInfra -SkipSeed   # Re-deploy apps only
 #>
 
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'SqlPassword', Justification = 'The demo deployment generates a transient SQL admin password and passes it directly to Azure CLI and SQL seed commands. The script never persists it.')]
 [CmdletBinding()]
 param(
     [string]$ResourceGroup = 'rg-zava',
@@ -270,24 +271,20 @@ Write-Host "  ┌─────────────────────
 Write-Host "  │  SRE Agent configuration must be done via sre.azure.com │" -ForegroundColor Yellow
 Write-Host "  └──────────────────────────────────────────────────────────┘" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  1. Go to https://sre.azure.com and create two SRE Agents:" -ForegroundColor White
-Write-Host "     • Agent 1: SQL & App Performance (attach to rg-$Prefix)" -ForegroundColor Gray
-Write-Host "     • Agent 2: IT Support & ServiceNow (attach to rg-$Prefix)" -ForegroundColor Gray
+Write-Host "  1. Scenarios 1-3 require Agent 1 in https://sre.azure.com:" -ForegroundColor White
+Write-Host "     • Name: zava-sreagent-1 (or similar)" -ForegroundColor Gray
+Write-Host "     • Attach to resource group: $ResourceGroup" -ForegroundColor Gray
+Write-Host "     • Azure SRE Agent creation is portal/srectl driven; this Bicep deployment does not create it." -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "  2. Add MCP connectors in the SRE Agent portal:" -ForegroundColor White
+Write-Host "  2. Add connectors/triggers in the SRE Agent portal:" -ForegroundColor White
 Write-Host "     • SQL MCP:    mssql-mcp@latest" -ForegroundColor Gray
 Write-Host "       Env vars:   MSSQL_CONNECTION_STRING" -ForegroundColor DarkGray
 Write-Host "     • GitHub MCP: @github/github-mcp-server" -ForegroundColor Gray
 Write-Host "       Env vars:   GITHUB_PERSONAL_ACCESS_TOKEN" -ForegroundColor DarkGray
+Write-Host "     • HTTP trigger for Scenario 3; set ZAVA_SRE_HTTP_TRIGGER_URL before running simulator option 3" -ForegroundColor Gray
 Write-Host ""
-Write-Host "  3. Apply srectl configs:" -ForegroundColor White
-Write-Host "     srectl apply -f sre-config/agent1/skills/" -ForegroundColor Gray
-Write-Host "     srectl apply -f sre-config/agent1/hooks/" -ForegroundColor Gray
-Write-Host "     srectl apply -f sre-config/agent1/agents/" -ForegroundColor Gray
-Write-Host "     srectl apply -f sre-config/agent1/tools/" -ForegroundColor Gray
-Write-Host "     srectl apply -f sre-config/agent1/scheduledtasks/" -ForegroundColor Gray
-Write-Host "     srectl apply -f sre-config/agent2/agents/" -ForegroundColor Gray
-Write-Host "     srectl apply -f sre-config/agent2/tools/" -ForegroundColor Gray
+Write-Host "  3. Prepare Scenarios 1-3 after creating Agent 1:" -ForegroundColor White
+Write-Host "     .\sre-config\setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id <agent-1-id>" -ForegroundColor Gray
 Write-Host ""
 
 # ═════════════════════════════════════════════════════════════
@@ -307,7 +304,7 @@ Write-Host "    SQL Server:    $SqlServer.database.windows.net" -ForegroundColor
 Write-Host "    Dashboard:     https://portal.azure.com (search 'dash-$Prefix')" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Next Steps:" -ForegroundColor White
-Write-Host "    1. Configure SRE Agents at https://sre.azure.com" -ForegroundColor Gray
-Write-Host "    2. Run the simulator:  python simulator/demo.py" -ForegroundColor Gray
-Write-Host "    3. Trigger scenarios and watch SRE Agent respond!" -ForegroundColor Gray
+Write-Host "    1. Create/configure Agent 1 at https://sre.azure.com for Scenarios 1-3" -ForegroundColor Gray
+Write-Host "    2. Run: .\sre-config\setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id <agent-1-id>" -ForegroundColor Gray
+Write-Host "    3. Run the simulator:  python simulator/demo.py" -ForegroundColor Gray
 Write-Host ""

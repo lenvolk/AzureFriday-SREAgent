@@ -1,0 +1,24 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {"type":"text","id":"t","x":250,"y":15,"text":"Scenario 3 — Bad Deployment","fontSize":22,"strokeColor":"#1e1e1e"},
+    {"type":"rectangle","id":"sim","x":40,"y":80,"width":180,"height":80,"backgroundColor":"#a5d8ff","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#4a9eed","label":{"text":"Simulator #3\npush bad config","fontSize":15}},
+    {"type":"rectangle","id":"app","x":320,"y":80,"width":180,"height":80,"backgroundColor":"#ffc9c9","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#ef4444","label":{"text":"App Service\nhealth = 503","fontSize":15}},
+    {"type":"arrow","id":"a1","x":220,"y":120,"width":100,"height":0,"points":[[0,0],[100,0]],"strokeColor":"#ef4444","endArrowhead":"arrow","label":{"text":"breaks","fontSize":14}},
+    {"type":"rectangle","id":"sre","x":580,"y":80,"width":180,"height":90,"backgroundColor":"#d0bfff","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#8b5cf6","label":{"text":"SRE Agent 1\nHTTP trigger","fontSize":16}},
+    {"type":"arrow","id":"a2","x":500,"y":120,"width":80,"height":0,"points":[[0,0],[80,0]],"strokeColor":"#8b5cf6","endArrowhead":"arrow","label":{"text":"webhook","fontSize":14}},
+    {"type":"rectangle","id":"val","x":320,"y":220,"width":240,"height":80,"backgroundColor":"#eebefa","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#ec4899","label":{"text":"deployment-validator\ncheck /health + diff","fontSize":14}},
+    {"type":"arrow","id":"a3","x":670,"y":170,"width":-110,"height":50,"points":[[0,0],[-110,50]],"strokeColor":"#ec4899","endArrowhead":"arrow"},
+    {"type":"rectangle","id":"gh","x":600,"y":220,"width":160,"height":80,"backgroundColor":"#fff3bf","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#f59e0b","label":{"text":"GitHub MCP\n(optional)","fontSize":14}},
+    {"type":"arrow","id":"a4","x":600,"y":260,"width":-40,"height":0,"points":[[0,0],[-40,0]],"strokeColor":"#f59e0b","endArrowhead":"arrow","label":{"text":"diff","fontSize":13}},
+    {"type":"rectangle","id":"fix","x":320,"y":360,"width":240,"height":80,"backgroundColor":"#b2f2bb","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#22c55e","label":{"text":"Restore good config\nrestart App Service","fontSize":14}},
+    {"type":"arrow","id":"a5","x":440,"y":300,"width":0,"height":60,"points":[[0,0],[0,60]],"strokeColor":"#22c55e","endArrowhead":"arrow"},
+    {"type":"arrow","id":"a6","x":410,"y":360,"width":0,"height":-200,"points":[[0,0],[0,-200]],"strokeColor":"#22c55e","endArrowhead":"arrow","label":{"text":"applied","fontSize":14}},
+    {"type":"text","id":"r1","x":40,"y":380,"text":"Result: app health","fontSize":16,"strokeColor":"#15803d"},
+    {"type":"text","id":"r2","x":40,"y":405,"text":"503  -->  200","fontSize":18,"strokeColor":"#15803d"}
+  ],
+  "appState": { "viewBackgroundColor": "#ffffff", "gridSize": null },
+  "files": {}
+}

@@ -193,6 +193,24 @@ $env:ZAVA_SRE_HTTP_TRIGGER_AUDIENCE = "<audience-from-Part-2-step-5>"
 
 ### Scenario 1 — Slow Query (missing index)
 
+```mermaid
+flowchart LR
+    SIM[Simulator<br/>demo.py 1]:::input -->|slow SELECTs| SQL[(Azure SQL DB<br/>Products table)]:::data
+    SQL -->|DTU spike| MON[Azure Monitor<br/>DTU > 80% alert]:::warn
+    MON -->|fires| SRE[SRE Agent 1<br/>SQL MCP]:::agent
+    SRE --> SKILL[Skills + Hooks<br/>diagnose + risk check]:::skill
+    SKILL --> FIX[CREATE INDEX<br/>IX_Products_Category]:::fix
+    FIX -.applied.-> SQL
+    classDef input fill:#a5d8ff,stroke:#4a9eed,color:#1e1e1e
+    classDef data fill:#c3fae8,stroke:#06b6d4,color:#1e1e1e
+    classDef warn fill:#fff3bf,stroke:#f59e0b,color:#1e1e1e
+    classDef agent fill:#d0bfff,stroke:#8b5cf6,color:#1e1e1e
+    classDef skill fill:#eebefa,stroke:#ec4899,color:#1e1e1e
+    classDef fix fill:#b2f2bb,stroke:#22c55e,color:#1e1e1e
+```
+
+> Source: [`docs/diagrams/scenario-1-slow-query.excalidraw`](docs/diagrams/scenario-1-slow-query.excalidraw) — open at <https://excalidraw.com> to edit.
+
 **What breaks.** Simulator drops every index on `Products.Category`, then hammers `SELECT … WHERE Category = @c` until DTU > 80%.
 
 **What the agent does.** DTU alert fires → SRE Agent connects via SQL MCP → `sql-query-diagnosis` finds the missing index → `change-risk-assessor` and `sql-write-guard` approve the DDL → `sql-performance-fix` runs `CREATE NONCLUSTERED INDEX IX_Products_Category`.
@@ -215,6 +233,24 @@ python simulator/demo.py 1
 
 ### Scenario 2 — Blocking Chain
 
+```mermaid
+flowchart LR
+    SIM[Simulator #2<br/>BEGIN TRAN + WAITFOR DELAY]:::bad -->|head blocker| SQL[(Azure SQL DB<br/>Orders table locked)]:::data
+    BLK[Concurrent queries<br/>blocked]:::warn -->|wait| SQL
+    SRE[SRE Agent 1<br/>SQL MCP]:::agent -->|poll DMVs| SQL
+    SRE --> DIAG[sql-blocking-diagnosis<br/>find head SPID]:::skill
+    DIAG --> FIX[sql-blocking-fix<br/>KILL spid with approval]:::fix
+    FIX -.unblock.-> BLK
+    classDef bad fill:#ffc9c9,stroke:#ef4444,color:#1e1e1e
+    classDef data fill:#c3fae8,stroke:#06b6d4,color:#1e1e1e
+    classDef warn fill:#ffd8a8,stroke:#f59e0b,color:#1e1e1e
+    classDef agent fill:#d0bfff,stroke:#8b5cf6,color:#1e1e1e
+    classDef skill fill:#eebefa,stroke:#ec4899,color:#1e1e1e
+    classDef fix fill:#b2f2bb,stroke:#22c55e,color:#1e1e1e
+```
+
+> Source: [`docs/diagrams/scenario-2-blocking-chain.excalidraw`](docs/diagrams/scenario-2-blocking-chain.excalidraw)
+
 **What breaks.** Simulator opens `BEGIN TRAN` + `UPDATE Orders` + `WAITFOR DELAY`, holding locks while concurrent reads pile up behind it.
 
 **What the agent does.** SRE Agent polls `sys.dm_exec_requests` / `sys.dm_tran_locks` via SQL MCP → `sql-blocking-diagnosis` identifies the head blocker → `sql-blocking-fix` kills the offending SPID after risk approval.
@@ -235,6 +271,24 @@ python simulator/demo.py 2
 ---
 
 ### Scenario 3 — Bad Deployment
+
+```mermaid
+flowchart LR
+    SIM[Simulator #3<br/>push bad config]:::input -->|breaks| APP[App Service<br/>health = 503]:::bad
+    SIM -->|webhook| SRE[SRE Agent 1<br/>HTTP trigger]:::agent
+    SRE --> VAL[deployment-validator<br/>check /health + diff]:::skill
+    VAL -.optional.-> GH[GitHub MCP<br/>commit diff]:::warn
+    VAL --> FIX[Restore good config<br/>restart App Service]:::fix
+    FIX -.applied.-> APP
+    classDef input fill:#a5d8ff,stroke:#4a9eed,color:#1e1e1e
+    classDef bad fill:#ffc9c9,stroke:#ef4444,color:#1e1e1e
+    classDef warn fill:#fff3bf,stroke:#f59e0b,color:#1e1e1e
+    classDef agent fill:#d0bfff,stroke:#8b5cf6,color:#1e1e1e
+    classDef skill fill:#eebefa,stroke:#ec4899,color:#1e1e1e
+    classDef fix fill:#b2f2bb,stroke:#22c55e,color:#1e1e1e
+```
+
+> Source: [`docs/diagrams/scenario-3-bad-deployment.excalidraw`](docs/diagrams/scenario-3-bad-deployment.excalidraw)
 
 **Prerequisite:** `ZAVA_SRE_HTTP_TRIGGER_URL` and `ZAVA_SRE_HTTP_TRIGGER_AUDIENCE` env vars set (from Part 2 Step 5).
 

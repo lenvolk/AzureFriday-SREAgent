@@ -1,0 +1,24 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {"type":"text","id":"t","x":210,"y":15,"text":"Scenario 1 — Slow Query (Missing Index)","fontSize":22,"strokeColor":"#1e1e1e"},
+    {"type":"rectangle","id":"sim","x":40,"y":80,"width":160,"height":80,"backgroundColor":"#a5d8ff","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#4a9eed","label":{"text":"Simulator\n(demo.py #1)","fontSize":16}},
+    {"type":"rectangle","id":"sql","x":320,"y":80,"width":160,"height":80,"backgroundColor":"#c3fae8","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#06b6d4","label":{"text":"Azure SQL DB\nProducts table","fontSize":16}},
+    {"type":"arrow","id":"a1","x":200,"y":120,"width":120,"height":0,"points":[[0,0],[120,0]],"strokeColor":"#1e1e1e","endArrowhead":"arrow","label":{"text":"slow SELECTs","fontSize":14}},
+    {"type":"rectangle","id":"mon","x":600,"y":80,"width":160,"height":80,"backgroundColor":"#fff3bf","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#f59e0b","label":{"text":"Azure Monitor\nDTU > 80% alert","fontSize":16}},
+    {"type":"arrow","id":"a2","x":480,"y":120,"width":120,"height":0,"points":[[0,0],[120,0]],"strokeColor":"#f59e0b","endArrowhead":"arrow","label":{"text":"DTU spike","fontSize":14}},
+    {"type":"rectangle","id":"sre","x":600,"y":260,"width":160,"height":90,"backgroundColor":"#d0bfff","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#8b5cf6","label":{"text":"SRE Agent 1\nSQL MCP","fontSize":16}},
+    {"type":"arrow","id":"a3","x":680,"y":160,"width":0,"height":100,"points":[[0,0],[0,100]],"strokeColor":"#8b5cf6","endArrowhead":"arrow","label":{"text":"fires","fontSize":14}},
+    {"type":"rectangle","id":"skills","x":320,"y":260,"width":200,"height":90,"backgroundColor":"#eebefa","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#ec4899","label":{"text":"Skills + Hooks\ndiagnose + risk check","fontSize":15}},
+    {"type":"arrow","id":"a4","x":600,"y":305,"width":-80,"height":0,"points":[[0,0],[-80,0]],"strokeColor":"#ec4899","endArrowhead":"arrow"},
+    {"type":"rectangle","id":"fix","x":320,"y":400,"width":200,"height":80,"backgroundColor":"#b2f2bb","fillStyle":"solid","roundness":{"type":3},"strokeColor":"#22c55e","label":{"text":"CREATE INDEX\nIX_Products_Category","fontSize":15}},
+    {"type":"arrow","id":"a5","x":420,"y":350,"width":0,"height":50,"points":[[0,0],[0,50]],"strokeColor":"#22c55e","endArrowhead":"arrow"},
+    {"type":"arrow","id":"a6","x":400,"y":440,"width":-180,"height":-280,"points":[[0,0],[-180,-280]],"strokeColor":"#22c55e","endArrowhead":"arrow","label":{"text":"applied","fontSize":14}},
+    {"type":"text","id":"r1","x":40,"y":410,"text":"Result: query latency","fontSize":16,"strokeColor":"#15803d"},
+    {"type":"text","id":"r2","x":40,"y":435,"text":"~1000ms  -->  ~5ms","fontSize":18,"strokeColor":"#15803d"}
+  ],
+  "appState": { "viewBackgroundColor": "#ffffff", "gridSize": null },
+  "files": {}
+}

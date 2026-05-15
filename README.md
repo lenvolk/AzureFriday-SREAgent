@@ -16,7 +16,7 @@
 │  │  app-zava     │   │ app-zava-    │   │ app-zava-    │               │
 │  │  (.NET 8)     │   │ itportal     │   │ warranty     │               │
 │  │  Main API     │   │ (Node 20)    │   │ (Python 3.12)│               │
-│  │  /health      │   │ IT Portal    │   │ FastAPI      │               │
+│  │  /health      │   │ IT Portal    │   │ HTTP API     │               │
 │  │  /api/products│   │              │   │ /warranty/*  │               │
 │  └──────┬───────┘   └──────────────┘   └──────────────┘               │
 │         │                                                              │
@@ -84,7 +84,7 @@ cd AzureFriday-SREAgent
 az login
 
 # 3. Deploy everything with one command
-./infra/deploy.ps1 -ResourceGroup rg-zava -Location westus2 -SqlPassword 'YourP@ssw0rd!'
+./infra/deploy.ps1 -ResourceGroup rg-zava -Location westus2 -SqlPassword '<sql-password>'
 
 # — OR deploy step-by-step: —
 
@@ -95,11 +95,11 @@ az group create -n rg-zava -l westus2
 az deployment group create \
   -g rg-zava \
   -f infra/main.bicep \
-  -p sqlAdminPassword='YourP@ssw0rd!'
+  -p sqlAdminPassword='<sql-password>'
 
 # Seed the database
 sqlcmd -S sql-zava.database.windows.net -U <SQL_USER> \
-       -P 'YourP@ssw0rd!' -d sqldb-zava -i infra/seed-database.sql
+  -P '<sql-password>' -d sqldb-zava -i infra/seed-database.sql
 ```
 
 After deployment, verify:
@@ -138,10 +138,10 @@ AzureFriday-SREAgent/
 │   ├── style.css                   # Portal styling
 │   └── package.json                # Node project
 │
-├── warranty-tool/                  # Warranty Lookup API (Python FastAPI)
-│   ├── app.py                      # FastAPI app: /warranty/{serial}, /devices
+├── warranty-tool/                  # Warranty Lookup API (Python standard library)
+│   ├── app.py                      # HTTP API: /warranty/{serial}, /devices
 │   ├── check_warranty.py           # Standalone CLI tool for SRE Agent
-│   ├── requirements.txt            # fastapi, uvicorn, gunicorn
+│   ├── requirements.txt            # requests for standalone client
 │   └── startup.sh                  # App Service startup command
 │
 ├── simulator/                      # Demo scenario simulator
@@ -405,7 +405,7 @@ The GitHub MCP connector allows SRE Agent to inspect repositories, commits, and 
 
 | Variable | Value |
 |----------|-------|
-| `GITHUB_PERSONAL_ACCESS_TOKEN` | `ghp_xxxxxxxxxxxxxxxxxxxx` |
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | `<github-pat>` |
 
 ---
 
@@ -468,7 +468,7 @@ Override defaults by setting environment variables:
 $env:ZAVA_SQL_SERVER   = "sql-zava.database.windows.net"
 $env:ZAVA_SQL_DATABASE = "sqldb-zava"
 $env:ZAVA_SQL_USER     = "<SQL_USER>"
-$env:ZAVA_SQL_PASSWORD = "YourP@ssw0rd!"
+$env:ZAVA_SQL_PASSWORD = "<sql-password>"
 $env:ZAVA_APP_URL      = "https://app-zava.azurewebsites.net"
 $env:ZAVA_SN_URL       = "https://dev123456.service-now.com"
 $env:ZAVA_SN_USER      = "admin"
@@ -511,7 +511,7 @@ After deployment, bookmark these:
 
 - Verify the PAT hasn't expired
 - Ensure the PAT has `repo` read permissions
-- Test: `curl -H "Authorization: token ghp_xxx" https://api.github.com/user`
+- Test: `curl -H "Authorization: token <github-pat>" https://api.github.com/user`
 
 ### SQL Auth vs Entra Auth
 

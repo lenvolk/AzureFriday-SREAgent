@@ -1,13 +1,15 @@
-"""Zava Warranty Lookup Service — FastAPI application.
+"""Zava Warranty Lookup Service.
 
-Serves warranty status data for the Azure Friday SRE Agent demo.
+Serves warranty status data for the Azure Friday SRE Agent demo without
+requiring third-party runtime packages in Azure App Service.
 """
 
+import json
+import os
 from datetime import date
-
-from fastapi import FastAPI, HTTPException
-
-app = FastAPI(title="Zava Warranty Lookup Service", version="1.0.0")
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote, urlparse
 
 # Mock warranty database
 WARRANTY_DB: dict[str, dict] = {
@@ -83,28 +85,23 @@ def _lookup(serial_number: str) -> dict:
     }
 
 
-@app.get("/")
 def root():
     return {"service": "Zava Warranty Lookup Service", "version": "1.0.0"}
 
 
-@app.get("/health")
 def health():
     return {"status": "healthy"}
 
 
-@app.get("/warranty/{serial_number}")
 def warranty_lookup(serial_number: str):
     result = _lookup(serial_number)
     if result is None:
-        raise HTTPException(
-            status_code=404,
-            detail={"found": False, "error": "Device not found in warranty database"},
-        )
+        return HTTPStatus.NOT_FOUND, {
+            "detail": {"found": False, "error": "Device not found in warranty database"}
+        }
     return result
 
 
-@app.get("/devices")
 def list_devices():
     devices = []
     for serial, info in WARRANTY_DB.items():
@@ -117,3 +114,51 @@ def list_devices():
             }
         )
     return {"devices": devices, "count": len(devices)}
+
+
+class WarrantyRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed_path = urlparse(self.path)
+        path = parsed_path.path.rstrip("/") or "/"
+
+        if path == "/":
+            self._send_json(root())
+            return
+
+        if path == "/health":
+            self._send_json(health())
+            return
+
+        if path == "/devices":
+            self._send_json(list_devices())
+            return
+
+        if path.startswith("/warranty/"):
+            serial_number = unquote(path.removeprefix("/warranty/"))
+            result = warranty_lookup(serial_number)
+            if isinstance(result, tuple):
+                status, payload = result
+                self._send_json(payload, status)
+            else:
+                self._send_json(result)
+            return
+
+        self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+
+    def log_message(self, format, *args):
+        print(f"{self.address_string()} - {format % args}")
+
+    def _send_json(self, payload: dict, status: HTTPStatus = HTTPStatus.OK):
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "8000"))
+    server = ThreadingHTTPServer(("0.0.0.0", port), WarrantyRequestHandler)
+    print(f"Starting Zava Warranty Lookup Service on port {port}")
+    server.serve_forever()

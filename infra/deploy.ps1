@@ -25,6 +25,9 @@
 .PARAMETER AlertEmail
     Optional email for Azure Monitor alert notifications.
 
+.PARAMETER ResourceGroupTags
+    Optional tags to apply when creating/updating the resource group.
+
 .PARAMETER SkipInfra
     Skip Bicep deployment (useful when re-deploying apps only).
 
@@ -48,6 +51,7 @@ param(
     [string]$Prefix        = 'zava',
     [string]$SqlPassword,
     [string]$AlertEmail    = '',
+    [string[]]$ResourceGroupTags = @(),
     [switch]$SkipInfra,
     [switch]$SkipSeed,
     [switch]$SkipApps
@@ -96,7 +100,11 @@ $WarrantyName = "app-$Prefix-warranty"
 
 if (-not $SkipInfra) {
     Write-Step "Creating resource group: $ResourceGroup in $Location"
-    az group create --name $ResourceGroup --location $Location --output none
+    if ($ResourceGroupTags.Count -gt 0) {
+        az group create --name $ResourceGroup --location $Location --tags $ResourceGroupTags --output none
+    } else {
+        az group create --name $ResourceGroup --location $Location --output none
+    }
     Write-Ok "Resource group ready"
 
     Write-Step "Deploying Bicep template (this may take 3-5 minutes)..."

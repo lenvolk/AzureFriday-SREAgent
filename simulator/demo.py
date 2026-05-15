@@ -65,6 +65,8 @@ SQL_SERVER   = os.environ.get("ZAVA_SQL_SERVER",   "sql-zava.database.windows.ne
 SQL_DATABASE = os.environ.get("ZAVA_SQL_DATABASE", "sqldb-zava")
 SQL_USER     = os.environ.get("ZAVA_SQL_USER",     "<SQL_ADMIN_USER>")
 SQL_PASSWORD = os.environ.get("ZAVA_SQL_PASSWORD", "<SQL_PASSWORD>")
+RESOURCE_GROUP = os.environ.get("ZAVA_RESOURCE_GROUP", "rg-zava")
+ALERT_NAME     = os.environ.get("ZAVA_DTU_ALERT_NAME", "alert-zava-dtu-high")
 
 APP_URL      = os.environ.get("ZAVA_APP_URL",      "https://app-zava.azurewebsites.net")
 HEALTH_URL   = f"{APP_URL}/health"
@@ -137,7 +139,7 @@ def _check_alert_fired(since_time=None):
         import subprocess
         sub = os.environ.get("ZAVA_SUBSCRIPTION_ID", "<SUBSCRIPTION_ID>")
         result = subprocess.run(
-            f'az rest --method GET --url "https://management.azure.com/subscriptions/{sub}/providers/Microsoft.AlertsManagement/alerts?api-version=2019-03-01&targetResourceGroup=rg-zava" -o json',
+            f'az rest --method GET --url "https://management.azure.com/subscriptions/{sub}/providers/Microsoft.AlertsManagement/alerts?api-version=2019-03-01&targetResourceGroup={RESOURCE_GROUP}" -o json',
             capture_output=True, text=True, timeout=20, shell=True
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -147,7 +149,7 @@ def _check_alert_fired(since_time=None):
                 rule = props.get("alertRule", "")
                 condition = props.get("monitorCondition", "")
                 start_str = props.get("startDateTime", "")
-                if "alert-zava-dtu-high" not in rule:
+                if ALERT_NAME not in rule:
                     continue
                 if condition not in ("Fired", "Resolved"):
                     continue

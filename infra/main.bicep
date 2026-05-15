@@ -11,7 +11,7 @@ targetScope = 'resourceGroup'
 // ── Parameters ──────────────────────────────────────────────
 
 @description('Azure region for all resources')
-param location string = 'westus2'
+param location string = 'centralus'
 
 @description('SQL Server administrator username')
 param sqlAdminUser string = 'sqladmin'
@@ -107,15 +107,15 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-// ── 6. App Service Plan (B1 Linux) ──────────────────────────
+// ── 6. App Service Plan (S2 Linux) ──────────────────────────
 
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: aspName
   location: location
   kind: 'linux'
   sku: {
-    name: 'B1'
-    tier: 'Basic'
+    name: 'S2'
+    tier: 'Standard'
     capacity: 1
   }
   properties: {
@@ -133,6 +133,7 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|8.0'
+      appCommandLine: 'dotnet AzureFridayApp.dll'
       alwaysOn: true
       healthCheckPath: '/health'
       appSettings: [
@@ -141,8 +142,12 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
           value: appInsights.properties.ConnectionString
         }
         {
-          name: 'ApplicationInsightsAgent_EXTENSION_VERSION'
-          value: '~3'
+          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+          value: 'false'
+        }
+        {
+          name: 'ENABLE_ORYX_BUILD'
+          value: 'false'
         }
       ]
       connectionStrings: [
@@ -166,6 +171,7 @@ resource itPortal 'Microsoft.Web/sites@2023-12-01' = {
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'NODE|20-lts'
+      appCommandLine: 'node server.js'
       alwaysOn: true
       appSettings: [
         {
@@ -175,6 +181,14 @@ resource itPortal 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'WEBSITE_NODE_DEFAULT_VERSION'
           value: '~20'
+        }
+        {
+          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+          value: 'false'
+        }
+        {
+          name: 'ENABLE_ORYX_BUILD'
+          value: 'false'
         }
       ]
     }
@@ -192,7 +206,7 @@ resource warrantyApp 'Microsoft.Web/sites@2023-12-01' = {
     siteConfig: {
       linuxFxVersion: 'PYTHON|3.12'
       alwaysOn: true
-      appCommandLine: 'uvicorn app:app --host 0.0.0.0 --port 8000'
+      appCommandLine: 'python app.py'
       appSettings: [
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -200,7 +214,11 @@ resource warrantyApp 'Microsoft.Web/sites@2023-12-01' = {
         }
         {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-          value: 'true'
+          value: 'false'
+        }
+        {
+          name: 'ENABLE_ORYX_BUILD'
+          value: 'false'
         }
       ]
     }
@@ -341,7 +359,7 @@ resource dashboard 'Microsoft.Portal/dashboards@2020-09-01-preview' = {
   tags: {
     'hidden-title': 'Zava Operations Dashboard'
   }
-  properties: {
+  properties: any({
     lenses: [
       {
         order: 0
@@ -472,7 +490,7 @@ resource dashboard 'Microsoft.Portal/dashboards@2020-09-01-preview' = {
         ]
       }
     ]
-  }
+  })
 }
 
 // ── Outputs ─────────────────────────────────────────────────

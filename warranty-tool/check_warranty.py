@@ -8,11 +8,14 @@ Standalone usage:
 """
 
 import json
+import os
 import sys
 
 import requests
 
-WARRANTY_API_URL = "https://app-zava-warranty.azurewebsites.net"
+WARRANTY_API_URL = os.environ.get(
+    "ZAVA_WARRANTY_API_URL", "https://app-zava-warranty.azurewebsites.net"
+).rstrip("/")
 
 
 def check_warranty(serial_number: str) -> dict:

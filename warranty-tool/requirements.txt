@@ -1,4 +1,1 @@
-fastapi
-uvicorn
-gunicorn
-python-dateutil
+requests

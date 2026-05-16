@@ -468,6 +468,8 @@ CREATE NONCLUSTERED INDEX IX_Products_Category ON dbo.Products(Category);
 Run the change only after user approval. After the change, validate that the index exists and that Products.Category queries are faster. Then summarize the root cause and remediation.
 ```
 
+For rehearsals and customer demos, disable the Scenario 1 alert reinvestigation cooldown or set it to the lowest value available. A long cooldown can suppress a corrected rerun after an earlier alert was completed as self-resolved.
+
 For Scenario 3, create another Azure Monitor incident response plan matching the health-check alert rule:
 
 ```powershell

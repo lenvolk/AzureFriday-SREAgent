@@ -554,10 +554,7 @@ def scenario_slow_query():
         console.print("[dim]Press any key…[/]"); _wait_key(); return
 
     cur = conn.cursor()
-    categories = [
-        "Running Shoes", "Training Gear", "Apparel",
-        "Accessories", "Recovery", "Smart Wearables",
-    ]
+    categories = ["Running", "Training", "Apparel", "Accessories"]
     log = []
     index_found = False
     index_banner_shown = False
@@ -630,13 +627,11 @@ def scenario_slow_query():
                 batch = min(batch_size, needed - inserted)
                 cat_label = f"Filler_{cat_idx:03d}"
                 cur.execute(
-                    f"INSERT INTO Products (Name, Category, Price, SKU, InStock) "
+                    f"INSERT INTO Products (Name, Category, Price) "
                     f"SELECT TOP {batch} "
                     f"'P-' + CAST(ABS(CHECKSUM(NEWID())) AS VARCHAR(10)), "
                     f"'{cat_label}', "
-                    f"CAST(RAND(CHECKSUM(NEWID())) * 490 + 10 AS DECIMAL(10,2)), "
-                    f"'SKU-' + CAST(ABS(CHECKSUM(NEWID())) AS VARCHAR(10)), "
-                    f"ABS(CHECKSUM(NEWID())) % 500 "
+                    f"CAST(RAND(CHECKSUM(NEWID())) * 490 + 10 AS DECIMAL(10,2)) "
                     f"FROM sys.all_objects a CROSS JOIN sys.all_objects b"
                 )
                 conn.commit()
@@ -654,6 +649,16 @@ def scenario_slow_query():
     _flush_cache()
     console.print("[yellow]Checking data volume…[/]")
     _ensure_data_volume()
+    try:
+        cur.execute("""
+            SELECT TOP 50 Category
+            FROM Products
+            GROUP BY Category
+            ORDER BY COUNT(*) DESC
+        """)
+        categories = [row[0] for row in cur.fetchall()]
+    except Exception as e:
+        console.print(f"[yellow]  ⚠ Category refresh skipped: {e}[/]")
     console.print("[green]Starting query loop …[/]\n")
     time.sleep(0.5)
 

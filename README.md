@@ -281,7 +281,7 @@ The portal no longer has a separate **Alert Handlers** blade. Azure Monitor aler
    - Check **I want a custom response plan** for Scenario 1.
    - **Agent autonomy:** choose **Review** for the first demo run so the agent proposes SQL changes before applying them.
    - **Run deep investigation:** leave unchecked for the first run.
-   - **Alert reinvestigation cooldown:** leave enabled at `3` hours to avoid duplicate investigations during repeated load tests.
+   - **Alert reinvestigation cooldown:** disable it or set it to the lowest value available while rehearsing/customer-demoing Scenario 1. A long cooldown can prevent a corrected rerun from opening a new investigation after a previous self-resolved alert.
 
    Use this custom response plan text:
 
@@ -324,7 +324,7 @@ The current portal flow does not expose a separate **Triggers** blade. Use Azure
    - Leave **I want a custom response plan** unchecked for the first run.
    - **Agent autonomy:** choose **Review**.
    - **Run deep investigation:** leave unchecked for the first run.
-   - **Alert reinvestigation cooldown:** leave enabled at `3` hours.
+   - **Alert reinvestigation cooldown:** leave enabled at `3` hours for Scenario 3 unless you are repeatedly rehearsing the same failure.
 3. Save the response plan.
 
 When Scenario 3 breaks the app's database connection string, `/health` returns 503, App Service health check fails, `alert-<prefix>-health-check` fires, and SRE Agent starts an incident investigation through Azure Monitor.

@@ -26,6 +26,12 @@ param prefix string = 'zava'
 @description('Alert notification email address')
 param alertEmail string = ''
 
+@description('Scenario 1 DTU alert threshold. Keep this demo-friendly so Azure Monitor reliably fires during the short simulator run.')
+param dtuAlertThreshold int = 20
+
+@description('Scenario 1 DTU alert evaluation window. PT1M keeps customer demos responsive; use PT5M+ for production-style monitoring.')
+param dtuAlertWindowSize string = 'PT1M'
+
 // ── Variables ───────────────────────────────────────────────
 
 var sqlServerName = 'sql-${prefix}'
@@ -243,20 +249,20 @@ resource actionGroup 'Microsoft.Insights/actionGroups@2023-09-01-preview' = if (
   }
 }
 
-// ── 10a. Alert: SQL DTU > 80% ───────────────────────────────
+// ── 10a. Alert: SQL DTU demo trigger ────────────────────────
 
 resource alertDtu 'Microsoft.Insights/metricAlerts@2018-03-01' = {
   name: 'alert-${prefix}-dtu-high'
   location: 'global'
   properties: {
-    description: 'SQL Database DTU usage exceeds 80%'
+    description: 'SQL Database DTU usage exceeds ${dtuAlertThreshold}% for Scenario 1 demo trigger'
     severity: 2
     enabled: true
     scopes: [
       sqlDatabase.id
     ]
     evaluationFrequency: 'PT1M'
-    windowSize: 'PT5M'
+    windowSize: dtuAlertWindowSize
     criteria: {
       'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
       allOf: [
@@ -265,7 +271,7 @@ resource alertDtu 'Microsoft.Insights/metricAlerts@2018-03-01' = {
           metricName: 'dtu_consumption_percent'
           metricNamespace: 'Microsoft.Sql/servers/databases'
           operator: 'GreaterThan'
-          threshold: 80
+          threshold: dtuAlertThreshold
           timeAggregation: 'Average'
           criterionType: 'StaticThresholdCriterion'
         }

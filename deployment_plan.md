@@ -38,6 +38,8 @@ $WarrantyApp = "app-$Prefix-warranty"
 $LogAnalytics = "law-$Prefix"
 $AppInsights = "ai-$Prefix"
 $DtuAlertName = "alert-$Prefix-dtu-high"
+$DtuAlertThreshold = 20
+$DtuAlertWindowSize = 'PT1M'
 ```
 
 Generate a SQL admin password locally and never print it:
@@ -113,6 +115,8 @@ $Location = 'centralus' # or the first viable candidate region
   -SqlPassword $SqlPassword `
   -ResourceGroupTags SecurityControl=Ignore
 ```
+
+The Bicep defaults intentionally make Scenario 1 demo-friendly: `alert-<prefix>-dtu-high` fires when average DTU is above 20% for 1 minute. Do not raise it to an 80% / 5-minute production-style rule for customer demos unless you also plan a sustained load generator.
 
 If seeding fails because both `sqlcmd` and `Invoke-Sqlcmd` are unavailable, install the `SqlServer` PowerShell module and rerun only seed/apps as needed:
 
@@ -443,6 +447,13 @@ For Scenario 1, create an Azure Monitor incident response plan matching the depl
 $DtuAlertName
 ```
 
+The DTU alert should be tuned for demos before running Scenario 1:
+
+```powershell
+$DtuAlertThreshold
+$DtuAlertWindowSize
+```
+
 For Scenario 3, create another Azure Monitor incident response plan matching the health-check alert rule:
 
 ```powershell
@@ -476,6 +487,8 @@ If the resource group has multiple SRE Agents, pass the target agent's full ARM 
 
 The helper validates the deployed resources, prints connector values with placeholders instead of secrets, deploys hooks from `sre-config/agent1/hooks/` through REST, and applies these remaining Agent 1 assets when `srectl` is available:
 
+It also repairs older deployments by updating `$DtuAlertName` to `avg dtu_consumption_percent > $DtuAlertThreshold` over `$DtuAlertWindowSize`. That is the setting that prevents Scenario 1 from waiting indefinitely for a long 80% spike during a live customer demo.
+
 ```powershell
 srectl config set-context /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-name>
 srectl apply -f sre-config/agent1/skills/
@@ -487,6 +500,7 @@ srectl apply -f sre-config/agent1/scheduledtasks/
 Set local simulator variables for Scenarios 1-3:
 
 ```powershell
+$env:ZAVA_SUBSCRIPTION_ID = $SubscriptionId
 $env:ZAVA_RESOURCE_GROUP = $ResourceGroup
 $env:ZAVA_SQL_SERVER = "$SqlServer.database.windows.net"
 $env:ZAVA_SQL_DATABASE = $SqlDatabase

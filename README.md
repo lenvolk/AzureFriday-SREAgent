@@ -20,7 +20,7 @@ Deploy a realistic e-commerce platform ("Zava"), break it on purpose, and watch 
 │  Azure SQL Server + DB (Basic, 5 DTU)                   │
 │  Application Insights + Log Analytics                   │
 │  Azure Monitor alert rules:                             │
-│    • alert-<prefix>-dtu-high       (DTU > 80%)          │
+│    • alert-<prefix>-dtu-high       (DTU > 20%, 1 min)   │
 │    • alert-<prefix>-http-5xx       (HTTP 5xx errors)    │
 │    • alert-<prefix>-health-check   (probe failures)     │
 │  Azure Portal dashboard                                 │
@@ -293,6 +293,8 @@ The Bicep deployment creates these alert rules in `rg-zava-<suffix>`:
 
 The important one for Scenario 1 is `alert-<prefix>-dtu-high`. Azure SRE Agent scans Azure Monitor every minute and starts an investigation when a matching alert fires.
 
+For customer demos, the DTU alert intentionally uses a responsive threshold: average DTU > 20% over 1 minute. This keeps Scenario 1 from stalling while Azure Monitor waits for a long sustained spike. The setup helper below also repairs older deployments to that same threshold/window.
+
 If alerts do not appear later, verify that the agent's managed identity has **Monitoring Contributor** on the subscription/resource group and that `rg-zava-<suffix>` is included in the agent's managed Azure resources.
 
 ### Step 5 — Add the Scenario 3 health-check response plan
@@ -327,6 +329,8 @@ Run the helper to validate the Azure workload and deploy the hooks to Agent 1:
 ```
 
 The script looks for a single `Microsoft.App/agents` resource in the resource group, reads its `properties.agentEndpoint`, gets an Azure CLI token for `https://azuresre.dev`, and PUTs each YAML file to the SRE Agent data-plane hooks API. If the resource group has multiple SRE Agents, pass the target agent's ARM resource ID explicitly:
+
+The same helper also ensures `alert-<prefix>-dtu-high` is demo-ready: average DTU > 20% over a 1-minute window. If you want to override that for a production-style rehearsal, pass `-DtuAlertThreshold` and `-DtuAlertWindowSize`.
 
 ```powershell
 ./sre-config/setup-scenarios-1-3.ps1 `
@@ -382,6 +386,7 @@ python -m venv .venv
 pip install -r simulator/requirements.txt
 
 # Reuse $Prefix / $ResourceGroup from Part 1
+$env:ZAVA_SUBSCRIPTION_ID = (az account show --query id -o tsv)
 $env:ZAVA_RESOURCE_GROUP = $ResourceGroup
 $env:ZAVA_SQL_SERVER     = "sql-$Prefix.database.windows.net"
 $env:ZAVA_SQL_DATABASE   = "sqldb-$Prefix"
@@ -401,7 +406,7 @@ $env:ZAVA_DTU_ALERT_NAME = "alert-$Prefix-dtu-high"
 ```mermaid
 flowchart LR
     SIM[Simulator<br/>demo.py 1]:::input -->|slow SELECTs| SQL[(Azure SQL DB<br/>Products table)]:::data
-    SQL -->|DTU spike| MON[Azure Monitor<br/>DTU > 80% alert]:::warn
+      SQL -->|DTU spike| MON[Azure Monitor<br/>DTU > 20%, 1 min alert]:::warn
     MON -->|fires| SRE[SRE Agent 1<br/>SQL MCP]:::agent
     SRE --> SKILL[Skills + Hooks<br/>diagnose + risk check]:::skill
     SKILL --> FIX[CREATE INDEX<br/>IX_Products_Category]:::fix
@@ -416,7 +421,7 @@ flowchart LR
 
 > Source: [`docs/diagrams/scenario-1-slow-query.excalidraw`](docs/diagrams/scenario-1-slow-query.excalidraw) — open at <https://excalidraw.com> to edit.
 
-**What breaks.** Simulator drops every index on `Products.Category`, then hammers `SELECT … WHERE Category = @c` until DTU > 80%.
+**What breaks.** Simulator drops every index on `Products.Category`, then hammers `SELECT … WHERE Category = @c` until the demo DTU alert fires. The default threshold is DTU > 20% over 1 minute so customer demos do not wait on a long sustained 80% spike.
 
 **What the agent does.** DTU alert fires → SRE Agent connects via SQL MCP → `sql-query-diagnosis` finds the missing index → `change-risk-assessor` and `sql-write-guard` approve the DDL → `sql-performance-fix` runs `CREATE NONCLUSTERED INDEX IX_Products_Category`.
 

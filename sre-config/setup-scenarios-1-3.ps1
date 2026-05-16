@@ -23,6 +23,14 @@
 .PARAMETER HttpTriggerUrl
     Optional legacy Agent 1 HTTP trigger URL for Scenario 3. Current portal
     setup uses Azure Monitor health-check alerts instead.
+
+.PARAMETER DtuAlertThreshold
+    Scenario 1 DTU alert threshold. Defaults to a demo-friendly 20 percent so
+    the short simulator workload reliably fires Azure Monitor.
+
+.PARAMETER DtuAlertWindowSize
+    Scenario 1 DTU alert evaluation window. Defaults to PT1M for responsive
+    customer demos.
 #>
 
 [CmdletBinding()]
@@ -30,7 +38,9 @@ param(
     [string]$ResourceGroup = 'rg-zava',
     [string]$Prefix = 'zava',
     [string]$SreAgent1Id = '',
-    [string]$HttpTriggerUrl = ''
+    [string]$HttpTriggerUrl = '',
+    [int]$DtuAlertThreshold = 20,
+    [string]$DtuAlertWindowSize = 'PT1M'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -191,6 +201,66 @@ function Publish-SreAgentHooks {
     }
 }
 
+function Set-DtuAlertDemoSettings {
+    param(
+        [string]$ResourceGroup,
+        [string]$AlertName,
+        [int]$Threshold,
+        [string]$WindowSize
+    )
+
+    $alert = az monitor metrics alert show --resource-group $ResourceGroup --name $AlertName --output json 2>$null | ConvertFrom-Json
+    if (-not $alert) {
+        Write-Warn "Could not read DTU alert '$AlertName'. Skipping demo alert tuning."
+        return
+    }
+
+    if (-not $alert.criteria -or -not $alert.criteria.allOf -or $alert.criteria.allOf.Count -lt 1) {
+        Write-Warn "DTU alert '$AlertName' has an unexpected criteria shape. Skipping demo alert tuning."
+        return
+    }
+
+    $criterion = $alert.criteria.allOf[0]
+    $currentThreshold = [double]$criterion.threshold
+    $currentWindow = [string]$alert.windowSize
+
+    if ($currentThreshold -eq [double]$Threshold -and $currentWindow -eq $WindowSize -and $alert.evaluationFrequency -eq 'PT1M') {
+        Write-Ok "DTU alert is demo-ready: $AlertName > $Threshold% over $WindowSize"
+        return
+    }
+
+    $criterion.threshold = [double]$Threshold
+    $alert.windowSize = $WindowSize
+    $alert.evaluationFrequency = 'PT1M'
+    $alert.description = "SQL Database DTU usage exceeds $Threshold% for Scenario 1 demo trigger"
+    $actions = if ($null -eq $alert.actions) { @() } else { $alert.actions }
+
+    $body = @{
+        location = 'global'
+        tags = $alert.tags
+        properties = @{
+            description = $alert.description
+            severity = $alert.severity
+            enabled = $alert.enabled
+            scopes = $alert.scopes
+            evaluationFrequency = $alert.evaluationFrequency
+            windowSize = $alert.windowSize
+            criteria = $alert.criteria
+            actions = $actions
+        }
+    } | ConvertTo-Json -Depth 30
+
+    $bodyFile = New-TemporaryFile
+    try {
+        Set-Content -Path $bodyFile -Value $body -Encoding utf8
+        $url = "https://management.azure.com$($alert.id)?api-version=2018-03-01"
+        az rest --method PUT --url $url --body "@$($bodyFile.FullName)" --output none
+        Write-Ok "Updated DTU alert for demos: $AlertName > $Threshold% over $WindowSize"
+    } finally {
+        Remove-Item $bodyFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw 'Azure CLI (az) is required.'
 }
@@ -222,6 +292,9 @@ foreach ($required in $requiredResources) {
         Write-Warn "Missing $($required.Name) [$($required.Type)]"
     }
 }
+
+Write-Step 'Ensuring Scenario 1 DTU alert is demo-ready'
+Set-DtuAlertDemoSettings -ResourceGroup $ResourceGroup -AlertName $DtuAlertName -Threshold $DtuAlertThreshold -WindowSize $DtuAlertWindowSize
 
 Write-Step 'Scenario 1-3 SRE Agent 1 connector values'
 Write-Host 'Create/select Agent 1 in https://sre.azure.com, attached to the demo resource group.' -ForegroundColor White
@@ -265,6 +338,8 @@ if (-not $srectl) {
 }
 
 Write-Step 'Simulator environment for Scenarios 1-3'
+$SubscriptionId = az account show --query id -o tsv
+Write-Host "`$env:ZAVA_SUBSCRIPTION_ID = '$SubscriptionId'"
 Write-Host "`$env:ZAVA_RESOURCE_GROUP = '$ResourceGroup'"
 Write-Host "`$env:ZAVA_SQL_SERVER = '$SqlServer.database.windows.net'"
 Write-Host "`$env:ZAVA_SQL_DATABASE = '$SqlDatabase'"

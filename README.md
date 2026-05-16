@@ -83,7 +83,26 @@ az group create -n $ResourceGroup -l centralus
 ./infra/deploy.ps1 -ResourceGroup $ResourceGroup -Location centralus -Prefix $Prefix
 ```
 
-`deploy.ps1` generates a random SQL admin password, deploys Bicep, seeds SQL, zip-deploys the apps, and prints the SQL connection-string template at the end. **Capture that output** — you need the password for Part 2.
+`deploy.ps1` prompts for the SQL admin password if you run it directly. The agent-driven `deployment_plan.md` path may generate a transient password and intentionally does not write it to disk or print it. If you do not know the current SQL password when configuring the SQL MCP connector, reset it before Part 2.
+
+To reset it safely without echoing the value in your terminal history:
+
+```powershell
+$Secure = Read-Host "New SQL admin password" -AsSecureString
+$Bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
+$SqlPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($Bstr)
+
+az sql server update -g $ResourceGroup -n "sql-$Prefix" --admin-password $SqlPassword
+
+$ConnectionString = "Server=tcp:sql-$Prefix.database.windows.net,1433;Database=sqldb-$Prefix;User ID=sqladmin;Password=$SqlPassword;Encrypt=True;TrustServerCertificate=False;"
+az webapp config connection-string set -g $ResourceGroup -n "app-$Prefix" --connection-string-type SQLAzure --settings DefaultConnection="$ConnectionString"
+az webapp restart -g $ResourceGroup -n "app-$Prefix"
+
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($Bstr)
+Remove-Variable SqlPassword, ConnectionString, Secure, Bstr
+```
+
+Use the same new password as `DB_PASSWORD` in the SQL MCP connector.
 
 ### Verify
 
@@ -163,7 +182,7 @@ The **Capabilities → Tools** page shows tools that are already connected. If i
   | `DB_SERVER` | `sql-<prefix>.database.windows.net` |
   | `DB_DATABASE` | `sqldb-<prefix>` |
   | `DB_USER` | `sqladmin` |
-  | `DB_PASSWORD` | `<the SQL password from Part 1>` |
+  | `DB_PASSWORD` | the SQL admin password you entered during deployment, or the new password you reset above |
   | `DB_PORT` | `1433` |
   | `DB_ENCRYPT` | `true` |
   | `DB_TRUST_SERVER_CERTIFICATE` | `false` |
@@ -180,7 +199,7 @@ The **Capabilities → Tools** page shows tools that are already connected. If i
   `mssql_run_sql_query` is needed because Scenario 1 creates an index and Scenario 2 may kill a blocking session. Keep the agent in approval mode for risky SQL changes.
 9. Go back to **Capabilities → Tools → MCP servers + services**. You should now see `zava-sql` and several active SQL tools.
 
-If you lost the SQL password from Part 1, reset it in Azure Portal on `sql-<prefix>` or run `az sql server update --admin-password <new-password>` and use the new password here.
+If you reset the SQL password after deployment, update the main app connection string as shown in Part 1 so `/health` continues to work.
 
 ### Step 3 — Attach the GitHub MCP connector (optional, Scenario 3)
 

@@ -460,7 +460,7 @@ python simulator/demo.py 1
 
 ```mermaid
 flowchart LR
-    SIM[Simulator #2<br/>BEGIN TRAN + WAITFOR DELAY]:::bad -->|head blocker| SQL[(Azure SQL DB<br/>Orders table locked)]:::data
+   SIM[Simulator #2<br/>BEGIN TRAN + UPDATE]:::bad -->|head blocker| SQL[(Azure SQL DB<br/>Products table locked)]:::data
     BLK[Concurrent queries<br/>blocked]:::warn -->|wait| SQL
     SRE[SRE Agent 1<br/>SQL MCP]:::agent -->|poll DMVs| SQL
     SRE --> DIAG[sql-blocking-diagnosis<br/>find head SPID]:::skill
@@ -476,7 +476,7 @@ flowchart LR
 
 > Source: [`docs/diagrams/scenario-2-blocking-chain.excalidraw`](docs/diagrams/scenario-2-blocking-chain.excalidraw)
 
-**What breaks.** Simulator opens `BEGIN TRAN` + `UPDATE Orders` + `WAITFOR DELAY`, holding locks while concurrent reads pile up behind it.
+**What breaks.** Simulator opens `BEGIN TRANSACTION`, runs an `UPDATE Products ...` statement, and deliberately does not commit it. That open transaction keeps an exclusive lock while a second session tries to read matching rows and gets blocked.
 
 **What the agent does.** SRE Agent polls `sys.dm_exec_requests` / `sys.dm_tran_locks` via SQL MCP → `sql-blocking-diagnosis` identifies the head blocker → `sql-blocking-fix` kills the offending SPID after risk approval.
 

@@ -271,7 +271,14 @@ The portal no longer has a separate **Alert Handlers** blade. Azure Monitor aler
 3. Save the incident platform.
 4. If the portal offers a **Quickstart response plan**, enable/create it.
 5. Go to **Builder → Incident response plans**.
-6. Confirm there is a response plan for Azure Monitor alerts. For this demo, make sure it includes the severities used by the deployed alert rules.
+6. Create or edit a response plan for Azure Monitor alerts:
+   - **Incident response plan name:** `zava-response-plan`
+   - **Severity:** `All severity`
+   - **Title contains:** start with `alert-<prefix>-dtu-high` for Scenario 1.
+   - Leave **Title does not contain** empty.
+   - Leave **I want a custom response plan** unchecked for the first run.
+
+   Add `alert-<prefix>-http-5xx` and `alert-<prefix>-health-check` later if you want the same response plan to catch web/app-health failures too. Starting with only the DTU alert keeps Scenario 1 easy to validate.
 
 The Bicep deployment creates these alert rules in `rg-zava-<suffix>`:
 

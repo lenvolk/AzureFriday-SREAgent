@@ -332,7 +332,7 @@ If the script prints `srectl is not installed`, it only validated Azure and prin
 | `change-risk-assessor` | Prompt | `PostToolUse` | `.*create_index.*|.*update_data.*|.*delete_data.*|.*insert_data.*` | `sre-config/agent1/hooks/change-risk-assessor.yaml` |
 | `sql-write-guard` | Command | `PostToolUse` | `.*sql.*|.*SQL.*|.*mssql.*` | `sre-config/agent1/hooks/sql-write-guard.yaml` |
 
-For both hooks, set **Activation mode** to `Always` and **Timeout** to `30` seconds. Paste the prompt or command script from the source YAML file into the portal form.
+For both hooks, set **Activation mode** to `Always` and **Timeout** to `30` seconds. Do not paste the entire YAML file into the portal field. For prompt hooks, paste only the text under `prompt: |`; for command hooks, paste only the script under `script: |`. Put the YAML `matcher` value into the portal's **Tool matcher** field.
 
 If you do not see an Agent ID in the portal, keep going with the portal UI. The ID is not required for Scenarios 1–3 as long as you manually add the SQL MCP connector and Azure Monitor incident response plans.
 

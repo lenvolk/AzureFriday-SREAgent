@@ -215,10 +215,52 @@ If you reset the SQL password after deployment, update the main app connection s
 
 ### Step 3 — Attach the GitHub MCP connector (optional, Scenario 3)
 
-| Field | Value |
-|-------|-------|
-| Package | `@github/github-mcp-server` |
-| Env var `GITHUB_PERSONAL_ACCESS_TOKEN` | fine-grained PAT, `repo` read on this fork |
+You do **not** need GitHub for Scenarios 1 and 2. Add it only if you want Scenario 3 to inspect recent repo changes during a bad deployment investigation.
+
+With GitHub connected, the SRE Agent can answer:
+
+- What changed in the last commit?
+- Did a config or code change line up with the app health failure?
+- Which file is the most likely cause of the failed deployment?
+- Are there related pull requests, workflow runs, or deployment records?
+
+Without GitHub connected, Scenario 3 can still use Azure Monitor, App Service settings, App Insights, Log Analytics, and the HTTP trigger. It just will not inspect repository history.
+
+#### Create a fine-grained GitHub PAT
+
+1. Go to <https://github.com/settings/personal-access-tokens/new>.
+2. Set **Token name** to `zava-sre-agent-demo`.
+3. Set **Expiration** to something short, such as 7 or 30 days.
+4. Set **Resource owner** to the owner of your fork, for example your GitHub user/org.
+5. Under **Repository access**, choose **Only select repositories**.
+6. Select only the repo used for the demo, for example `AzureFriday-SREAgent`.
+7. Under **Repository permissions**, set:
+
+   | Permission | Access | Why |
+   |------------|--------|-----|
+   | Contents | Read-only | Lets the agent inspect files and diffs. |
+   | Metadata | Read-only | Required by GitHub and automatically included. |
+   | Actions | Read-only | Optional; lets the agent inspect workflow runs. |
+   | Deployments | Read-only | Optional; lets the agent inspect deployment records. |
+   | Pull requests | Read-only | Optional; useful if the demo references PR context. |
+
+8. Click **Generate token**.
+9. Copy the token once. GitHub will not show it again.
+
+Treat the PAT like a password. Do not paste it into chat, commit it, screenshot it, or save it in this repo.
+
+#### Save the PAT in SRE Agent
+
+1. In SRE Agent, go to **Builder → Connectors**.
+2. Click **+ Add connector**.
+3. Choose the **GitHub** connector card under the **MCP** or **Code Repository** category.
+4. Paste the PAT when the connector asks for a GitHub token.
+5. Name the connection `zava-github` if the portal asks for a name.
+6. Save/add the connector and wait for status **Connected**.
+7. In the tool picker, select the GitHub tools for repository search, file/content reading, commits, pull requests, and workflow/actions lookup.
+8. Go to **Capabilities → Tools** and confirm the GitHub tools are active.
+
+Delete the PAT from GitHub after the demo if you no longer need repo investigation.
 
 ### Step 4 — Wire alert handlers (Scenarios 1 & 2)
 

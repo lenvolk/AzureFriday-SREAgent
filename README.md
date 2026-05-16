@@ -103,13 +103,23 @@ Azure SRE Agent has **no ARM / Bicep / `az` creation path** today. You'll create
 
 1. Browse to **<https://sre.azure.com>**.
 2. Click **Create Agent**.
-3. Fill in:
-   - **Name:** `zava-sreagent-1`
-   - **Subscription:** the one used in Part 1
-   - **Resource group:** `rg-zava-<suffix>` (from Part 1)
-   - **Description:** `Monitors SQL performance, validates deployments`
-4. Click **Create** and wait ~30 s.
-5. Copy the **Agent ID** shown after provisioning — you need it in Step 5.
+3. On **Basics**, fill in:
+
+    | Field | Value |
+    |-------|-------|
+    | Subscription | the subscription used in Part 1 |
+    | Resource group | `rg-zava-<suffix>` from Part 1 |
+    | Agent name | `zava-sreagent-1` |
+    | Region | choose an SRE Agent supported region shown in the portal. It can be different from the workload region. |
+    | Model provider | `Anthropic (3x)` is preferred for the demo. Choose `Azure OpenAI (1x)` if your tenant/data-boundary policy requires it. |
+    | Application Insights | **Use existing** |
+    | Application Insights subscription | the subscription used in Part 1 |
+    | Application Insights name | `ai-<prefix>` |
+
+    The Bicep deployment already creates Application Insights as `ai-<prefix>` and connects all three apps to it, so you do **not** need the SRE Agent wizard to create a second one. If `ai-<prefix>` is not listed, first confirm the Application Insights subscription is the same subscription from Part 1. Use **Create new** only if your SRE Agent tenant does not allow selecting the demo App Insights resource.
+4. Click **Next**, review the settings, then click **Deploy**.
+5. Wait for provisioning to finish.
+6. Copy the **Agent ID** shown after provisioning — you need it in Step 5.
 
 ### Step 2 — Attach the SQL MCP connector (required for Scenarios 1 & 2)
 
@@ -385,7 +395,7 @@ az webapp restart -g $ResourceGroup -n "app-$Prefix"
 az group delete -n $ResourceGroup --yes --no-wait
 ```
 
-Tears down all Azure resources. Delete the SRE Agent separately from <https://sre.azure.com> if you also want it gone.
+Tears down the demo workload, including `ai-<prefix>` and `law-<prefix>`. Delete the SRE Agent separately from <https://sre.azure.com> if you also want the agent billing to stop.
 
 ---
 
@@ -399,7 +409,9 @@ Tears down all Azure resources. Delete the SRE Agent separately from <https://sr
 | Azure Monitor alerts | Free tier | $0 |
 | **Total** | | **~$78/mo** |
 
-Delete the resource group right after the demo to keep the cost to a few cents.
+SRE Agent is billed separately from the workload at **$0.40/hour per agent** for always-on flow, plus active-flow AAU usage while it investigates. For a 1-hour demo with one agent, expect roughly **under $0.50** for the agent baseline before any extra active-flow tokens.
+
+Delete the resource group and the SRE Agent right after the demo to keep the cost to a few cents.
 
 ---
 

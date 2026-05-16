@@ -311,28 +311,52 @@ The current portal flow does not expose a separate **Triggers** blade. Use Azure
 
 When Scenario 3 breaks the app's database connection string, `/health` returns 503, App Service health check fails, `alert-<prefix>-health-check` fires, and SRE Agent starts an incident investigation through Azure Monitor.
 
-### Step 6 — Apply the skills, hooks, and agents from this repo
+### Step 6 — Add the repo hooks in the portal
 
-The `sre-config/agent1/` folder ships the skills (`sql-query-diagnosis`, `sql-blocking-fix`, …), hooks (`change-risk-assessor`, `sql-write-guard`), and the `deployment-validator` agent. Apply them via the helper script:
+The current setup path is portal-first. The helper script validates the Azure workload and prints connector values, but it does **not** upload hooks unless `srectl` is installed and you pass an SRE Agent context/ID.
+
+Run the helper once as a validation check:
 
 ```powershell
 ./sre-config/setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix
 ```
 
-This validates the workload and prints the connector values you need. If `srectl` is installed **and** you found the agent context/ID from the agent's settings or CLI setup page, rerun with `-SreAgent1Id`:
+If it prints `srectl is not installed`, that is expected for this lab. Continue in the portal.
+
+Go to **Builder → Hooks** and create these hooks manually.
+
+**Hook 1: `change-risk-assessor`**
+
+- **Name:** `change-risk-assessor`
+- **Event type:** `Post Tool Use`
+- **Activation mode:** `Always`
+- **Description:** `AI-powered risk assessment for SQL operations. Evaluates blast radius, business hours, and data sensitivity. Supports human-in-the-loop approval override.`
+- **Hook type:** `Prompt`
+- **Model:** `Reasoning Fast`
+- **Tool matcher:** `.*create_index.*|.*update_data.*|.*delete_data.*|.*insert_data.*`
+- **Timeout:** `30`
+- **Fail mode:** `Allow`
+- **Prompt:** paste only the text under `prompt: |` from `sre-config/agent1/hooks/change-risk-assessor.yaml`. Do not paste the full YAML file.
+
+**Hook 2: `sql-write-guard`**
+
+- **Name:** `sql-write-guard`
+- **Event type:** `Post Tool Use`
+- **Activation mode:** `Always`
+- **Description:** `Blocks destructive SQL operations (DROP, DELETE, TRUNCATE) but allows safe DDL (CREATE INDEX) and session management (KILL).`
+- **Hook type:** `Command`
+- **Tool matcher:** `.*sql.*|.*SQL.*|.*mssql.*`
+- **Timeout:** `30`
+- **Fail mode:** `Allow`
+- **Script:** paste only the Python script under `script: |` from `sre-config/agent1/hooks/sql-write-guard.yaml`. Do not paste the full YAML file.
+
+The `sre-config/agent1/` folder also contains the skill and custom-agent YAML files for source control. In this portal-first lab, the SQL MCP connector and Azure Monitor response plans are the important runtime pieces; create the hooks above for safety and governance.
+
+Optional: if `srectl` is installed **and** you found the agent context/ID from the agent's settings or CLI setup page, you can apply the repo YAML automatically with:
 
 ```powershell
 ./sre-config/setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id "<agent-id-or-srectl-context>"
 ```
-
-If the script prints `srectl is not installed`, it only validated Azure and printed setup values; it did **not** upload hooks, skills, or custom agents into SRE Agent. In that case, create the hooks manually from **Builder → Hooks**:
-
-| Hook | Type | Event | Matcher | Source |
-| --- | --- | --- | --- | --- |
-| `change-risk-assessor` | Prompt | `PostToolUse` | `.*create_index.*|.*update_data.*|.*delete_data.*|.*insert_data.*` | `sre-config/agent1/hooks/change-risk-assessor.yaml` |
-| `sql-write-guard` | Command | `PostToolUse` | `.*sql.*|.*SQL.*|.*mssql.*` | `sre-config/agent1/hooks/sql-write-guard.yaml` |
-
-For both hooks, set **Activation mode** to `Always` and **Timeout** to `30` seconds. Do not paste the entire YAML file into the portal field. For prompt hooks, paste only the text under `prompt: |`; for command hooks, paste only the script under `script: |`. Put the YAML `matcher` value into the portal's **Tool matcher** field.
 
 If you do not see an Agent ID in the portal, keep going with the portal UI. The ID is not required for Scenarios 1–3 as long as you manually add the SQL MCP connector and Azure Monitor incident response plans.
 

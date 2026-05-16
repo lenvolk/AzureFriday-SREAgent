@@ -120,10 +120,23 @@ Azure SRE Agent has **no ARM / Bicep / `az` creation path** today. You'll create
 4. Click **Next**, review the settings, then click **Deploy**.
 5. Wait for provisioning to finish.
 6. If the **More context. Better investigations.** screen appears:
-  - Click **Azure resources** and add/select `rg-zava-<suffix>`.
-  - Click **Logs** and select the demo Log Analytics / App Insights resources if shown.
-  - Click **Code** if you want Scenario 3 to inspect this GitHub repo.
-  - Click **Done and go to agent** when finished.
+   - Click **Azure resources** and add/select `rg-zava-<suffix>`.
+   - Click **Logs** and select the demo Log Analytics / App Insights resources if shown.
+   - Click **Code** if you want Scenario 3 to inspect this GitHub repo.
+   - Click **Done and go to agent** when finished.
+
+If the agent opens an onboarding chat and asks what these apps do, paste this:
+
+```text
+This is the Zava Azure Friday SRE Agent demo environment. The three web apps are one demo product:
+- app-<prefix>: .NET 8 storefront API with /health and /api/products.
+- app-<prefix>-itportal: Node.js IT support portal.
+- app-<prefix>-warranty: Python warranty lookup API.
+
+The main workload is app-<prefix> backed by Azure SQL Database sqldb-<prefix> on sql-<prefix>. Scenarios 1-3 intentionally create SQL performance, SQL blocking, and bad deployment failures so you can diagnose and remediate them.
+
+Use Azure Monitor alerts, Application Insights, Log Analytics, the SQL MCP connector, and the HTTP trigger to investigate the demo. The preferred behavior is to explain findings clearly, ask before risky changes, and validate health after remediation.
+```
 
 The portal may not show an Agent ID during this flow. That is OK. You only need the Agent ID if you plan to use `srectl` to apply repo config from the command line. For a portal-only setup, continue with Step 2.
 

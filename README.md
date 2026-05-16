@@ -197,7 +197,7 @@ The **Capabilities → Tools** page shows tools that are already connected. If i
    | `DB_DATABASE` | `sqldb-zava-lv514c` |
    | `DB_USER` | `sqladmin` |
 
-7. For **Managed identity**, choose **None**. This MCP server uses SQL authentication from the `DB_*` environment variables; the agent's managed identity is not used for this connector.
+7. For **Managed identity**, choose **None** if the portal keeps that value. If the portal changes it back to **System assigned**, leave it there. This MCP server still uses SQL authentication from the `DB_*` environment variables; the managed identity is only the agent identity used to host/run the connector process.
 
 8. Save/add the connector and wait for status **Connected**. In **Builder → Connectors**, you should see `zava-sql` with a green **Connected** status.
 9. When the tool picker appears, select these SQL tools:

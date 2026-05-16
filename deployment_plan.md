@@ -419,9 +419,18 @@ Purpose: SQL performance, blocking diagnosis, app health, deployment validation
 Add the SQL MCP connector to Agent 1:
 
 ```text
-Package: mssql-mcp@latest
-Environment variable: MSSQL_CONNECTION_STRING
-Value: Server=tcp:<sql-server>.database.windows.net,1433;Database=<sql-database>;User ID=sqladmin;Password=<secure-password>;Encrypt=True;TrustServerCertificate=False;
+Name / connection ID: zava-sql
+Transport: stdio
+Command: npx
+Arguments: -y mssql-mcp@latest
+Environment variables:
+  DB_SERVER=<sql-server>.database.windows.net
+  DB_DATABASE=<sql-database>
+  DB_USER=sqladmin
+  DB_PASSWORD=<secure-password>
+  DB_PORT=1433
+  DB_ENCRYPT=true
+  DB_TRUST_SERVER_CERTIFICATE=false
 ```
 
 For Scenario 1, link Agent 1 to the deployed DTU alert rule:

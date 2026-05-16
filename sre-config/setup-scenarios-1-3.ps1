@@ -49,7 +49,6 @@ $DtuAlertName = "alert-$Prefix-dtu-high"
 $Http5xxAlertName = "alert-$Prefix-http-5xx"
 $HealthAlertName = "alert-$Prefix-health-check"
 $MainAppUrl = "https://$MainApp.azurewebsites.net"
-$SqlConnectionString = "Server=tcp:$SqlServer.database.windows.net,1433;Database=$SqlDatabase;User ID=sqladmin;Password=<sql-password>;Encrypt=True;TrustServerCertificate=False;"
 
 Write-Step 'Validating deployed Scenario 1-3 Azure resources'
 $requiredResources = @(
@@ -75,8 +74,16 @@ Write-Step 'Scenario 1-3 SRE Agent 1 connector values'
 Write-Host 'Create/select Agent 1 in https://sre.azure.com, attached to the demo resource group.' -ForegroundColor White
 Write-Host 'Add SQL MCP connector:' -ForegroundColor White
 Write-Host '  Package: mssql-mcp@latest' -ForegroundColor Gray
-Write-Host '  Environment variable: MSSQL_CONNECTION_STRING' -ForegroundColor Gray
-Write-Host "  Value: $SqlConnectionString" -ForegroundColor DarkGray
+Write-Host '  Command: npx' -ForegroundColor Gray
+Write-Host '  Arguments: -y mssql-mcp@latest' -ForegroundColor Gray
+Write-Host '  Environment variables:' -ForegroundColor Gray
+Write-Host "    DB_SERVER=$SqlServer.database.windows.net" -ForegroundColor DarkGray
+Write-Host "    DB_DATABASE=$SqlDatabase" -ForegroundColor DarkGray
+Write-Host '    DB_USER=sqladmin' -ForegroundColor DarkGray
+Write-Host '    DB_PASSWORD=<sql-password>' -ForegroundColor DarkGray
+Write-Host '    DB_PORT=1433' -ForegroundColor DarkGray
+Write-Host '    DB_ENCRYPT=true' -ForegroundColor DarkGray
+Write-Host '    DB_TRUST_SERVER_CERTIFICATE=false' -ForegroundColor DarkGray
 Write-Host ''
 Write-Host 'For Scenario 3, create an HTTP trigger on Agent 1 and set:' -ForegroundColor White
 Write-Host '  ZAVA_SRE_HTTP_TRIGGER_URL=<agent-http-trigger-url>' -ForegroundColor Gray

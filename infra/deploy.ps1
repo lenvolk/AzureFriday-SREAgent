@@ -278,7 +278,9 @@ Write-Host "     • Azure SRE Agent creation is portal/srectl driven; this Bice
 Write-Host ""
 Write-Host "  2. Add connectors/triggers in the SRE Agent portal:" -ForegroundColor White
 Write-Host "     • SQL MCP:    mssql-mcp@latest" -ForegroundColor Gray
-Write-Host "       Env vars:   MSSQL_CONNECTION_STRING" -ForegroundColor DarkGray
+Write-Host "       Command:    npx" -ForegroundColor DarkGray
+Write-Host "       Arguments:  -y mssql-mcp@latest" -ForegroundColor DarkGray
+Write-Host "       Env vars:   DB_SERVER, DB_DATABASE, DB_USER, DB_PASSWORD, DB_PORT, DB_ENCRYPT, DB_TRUST_SERVER_CERTIFICATE" -ForegroundColor DarkGray
 Write-Host "     • GitHub MCP: @github/github-mcp-server" -ForegroundColor Gray
 Write-Host "       Env vars:   GITHUB_PERSONAL_ACCESS_TOKEN" -ForegroundColor DarkGray
 Write-Host "     • HTTP trigger for Scenario 3; set ZAVA_SRE_HTTP_TRIGGER_URL before running simulator option 3" -ForegroundColor Gray

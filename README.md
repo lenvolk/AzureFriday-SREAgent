@@ -142,14 +142,45 @@ The portal may not show an Agent ID during this flow. That is OK. You only need 
 
 ### Step 2 — Attach the SQL MCP connector (required for Scenarios 1 & 2)
 
-In the agent's **Tools → MCP Connectors** blade:
+The **Capabilities → Tools** page shows tools that are already connected. If it says **No MCP servers + services found**, add the connector first:
 
-| Field | Value |
-|-------|-------|
-| Package | `mssql-mcp@latest` |
-| Env var `MSSQL_CONNECTION_STRING` | `Server=tcp:sql-<prefix>.database.windows.net,1433;Database=sqldb-<prefix>;User ID=sqladmin;Password=<the password from Part 1>;Encrypt=True;` |
+1. Go to **Builder → Connectors**.
+2. Click **+ Add connector**.
+3. Choose **MCP Server**.
+4. Choose **stdio** / local process if prompted for transport.
+5. Fill in:
 
-Click **Test connection** — it should report "Connected".
+  | Field | Value |
+  |-------|-------|
+  | Name / connection ID | `zava-sql` |
+  | Command | `npx` |
+  | Arguments | `-y mssql-mcp@latest` |
+
+6. Add these environment variables:
+
+  | Variable | Value |
+  |----------|-------|
+  | `DB_SERVER` | `sql-<prefix>.database.windows.net` |
+  | `DB_DATABASE` | `sqldb-<prefix>` |
+  | `DB_USER` | `sqladmin` |
+  | `DB_PASSWORD` | `<the SQL password from Part 1>` |
+  | `DB_PORT` | `1433` |
+  | `DB_ENCRYPT` | `true` |
+  | `DB_TRUST_SERVER_CERTIFICATE` | `false` |
+
+7. Save/add the connector and wait for status **Connected**.
+8. When the tool picker appears, select these SQL tools:
+  - `mssql_connection_status`
+  - `mssql_list_schema_objects`
+  - `mssql_describe_table_columns`
+  - `mssql_read_table_rows`
+  - `mssql_run_sql_query`
+  - `mssql_execute_stored_procedure`
+
+  `mssql_run_sql_query` is needed because Scenario 1 creates an index and Scenario 2 may kill a blocking session. Keep the agent in approval mode for risky SQL changes.
+9. Go back to **Capabilities → Tools → MCP servers + services**. You should now see `zava-sql` and several active SQL tools.
+
+If you lost the SQL password from Part 1, reset it in Azure Portal on `sql-<prefix>` or run `az sql server update --admin-password <new-password>` and use the new password here.
 
 ### Step 3 — Attach the GitHub MCP connector (optional, Scenario 3)
 

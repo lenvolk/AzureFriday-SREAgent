@@ -286,7 +286,8 @@ Write-Host "       Env vars:   GITHUB_PERSONAL_ACCESS_TOKEN" -ForegroundColor Da
 Write-Host "     • Azure Monitor response plans: DTU alert for Scenario 1 and health-check alert for Scenario 3" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  3. Prepare Scenarios 1-3 after creating Agent 1:" -ForegroundColor White
-Write-Host "     .\sre-config\setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id <agent-1-id>" -ForegroundColor Gray
+Write-Host "     .\sre-config\setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix" -ForegroundColor Gray
+Write-Host "     (Add -SreAgent1Id <agent-arm-resource-id> only if the resource group has multiple agents.)" -ForegroundColor DarkGray
 Write-Host ""
 
 # ═════════════════════════════════════════════════════════════
@@ -307,6 +308,6 @@ Write-Host "    Dashboard:     https://portal.azure.com (search 'dash-$Prefix')"
 Write-Host ""
 Write-Host "  Next Steps:" -ForegroundColor White
 Write-Host "    1. Create/configure Agent 1 at https://sre.azure.com for Scenarios 1-3" -ForegroundColor Gray
-Write-Host "    2. Run: .\sre-config\setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id <agent-1-id>" -ForegroundColor Gray
+Write-Host "    2. Run: .\sre-config\setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix" -ForegroundColor Gray
 Write-Host "    3. Run the simulator:  python simulator/demo.py" -ForegroundColor Gray
 Write-Host ""

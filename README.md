@@ -38,7 +38,9 @@ Deploy a realistic e-commerce platform ("Zava"), break it on purpose, and watch 
 | Azure CLI | 2.60+ | `winget install Microsoft.AzureCLI` |
 | PowerShell | 7+ | `winget install Microsoft.PowerShell` |
 | Bicep | bundled with az | `az bicep install` |
+| .NET SDK | 8+ | `winget install Microsoft.DotNet.SDK.8` |
 | Python | 3.11+ | `winget install Python.Python.3.12` |
+| SRE Agent CLI | latest | `dotnet tool install sreagent.cli --global` |
 
 You also need:
 
@@ -46,7 +48,7 @@ You also need:
 - *(Scenario 3 deeper analysis only)* A GitHub fine-grained PAT with `repo` read.
 - *(Scenario 4 only)* A free [ServiceNow PDI](https://developer.servicenow.com/). Skip if you only run Scenarios 1–3.
 
-> **Note:** `srectl` (the SRE Agent CLI) has no winget/choco package today. Install it from the SRE Agent portal's **CLI** link. The repo works without it — the helper script falls back to validate-only mode.
+> **Note:** `srectl` is installed by the `sreagent.cli` .NET global tool, not winget/choco. If `dotnet tool install sreagent.cli --global` cannot find the package, open the SRE Agent portal's **CLI** link and confirm any required package source. The repo works without `srectl` — the helper script falls back to validate-only mode.
 
 ---
 
@@ -157,7 +159,7 @@ The main workload is app-<prefix> backed by Azure SQL Database sqldb-<prefix> on
 Use Azure Monitor alerts, Application Insights, Log Analytics, and the SQL MCP connector to investigate the demo. The preferred behavior is to explain findings clearly, ask before risky changes, and validate health after remediation.
 ```
 
-The portal may not show an Agent ID during this flow. That is OK. You only need the Agent ID if you plan to use `srectl` to apply repo config from the command line. For a portal-only setup, continue with Step 2.
+The portal may not show an Agent ID during this flow. That is OK. You only need the Agent ID if you plan to use `srectl` to apply repo config from the command line. If the portal later shows the agent's **ARM resource ID**, use that full value as the SRE Agent context/ID, for example `/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-name>`. Do not use a conversation/thread ID from an agent chat URL. For a portal-only setup, continue with Step 2.
 
 ### Step 2 — Attach the SQL MCP connector (required for Scenarios 1 & 2)
 
@@ -311,19 +313,31 @@ The current portal flow does not expose a separate **Triggers** blade. Use Azure
 
 When Scenario 3 breaks the app's database connection string, `/health` returns 503, App Service health check fails, `alert-<prefix>-health-check` fires, and SRE Agent starts an incident investigation through Azure Monitor.
 
-### Step 6 — Add the repo hooks in the portal
+### Step 6 — Deploy the repo hooks
 
-The current setup path is portal-first. The helper script validates the Azure workload and prints connector values, but it does **not** upload hooks unless `srectl` is installed and you pass an SRE Agent context/ID.
+The repo hooks live in [`sre-config/agent1/hooks/`](sre-config/agent1/hooks/). They are source-controlled safety controls that run after tool calls:
 
-Run the helper once as a validation check:
+- [`change-risk-assessor`](sre-config/agent1/hooks/change-risk-assessor.yaml) is a prompt hook. It reviews SQL-changing operations for business-hours risk, blast radius, data volume, and explicit approval. It helps the demo show human-in-the-loop governance instead of letting the agent make risky production changes silently.
+- [`sql-write-guard`](sre-config/agent1/hooks/sql-write-guard.yaml) is a command hook. It inspects SQL tool input and blocks destructive operations such as `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, and `DELETE FROM`, while allowing safe reads, `CREATE INDEX`, `KILL`, and `UPDATE STATISTICS`. It gives the SQL remediation scenarios a hard safety rail.
+
+Run the helper to validate the Azure workload and deploy the hooks to Agent 1:
 
 ```powershell
 ./sre-config/setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix
 ```
 
-If it prints `srectl is not installed`, that is expected for this lab. Continue in the portal.
+The script looks for a single `Microsoft.App/agents` resource in the resource group, reads its `properties.agentEndpoint`, gets an Azure CLI token for `https://azuresre.dev`, and PUTs each YAML file to the SRE Agent data-plane hooks API. If the resource group has multiple SRE Agents, pass the target agent's ARM resource ID explicitly:
 
-Go to **Builder → Hooks** and create these hooks manually.
+```powershell
+./sre-config/setup-scenarios-1-3.ps1 `
+   -ResourceGroup $ResourceGroup `
+   -Prefix $Prefix `
+   -SreAgent1Id "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-name>"
+```
+
+If `srectl` is installed, the same helper also applies the remaining repo YAML under `sre-config/agent1/` for skills, custom agents, tools, and scheduled tasks. If `srectl` is not installed, that is OK for Scenarios 1–3: the hooks are still deployed through REST, and the SQL MCP connector plus Azure Monitor response plans are the important runtime pieces.
+
+To verify in the portal, go to **Builder → Hooks** and confirm both hooks exist:
 
 **Hook 1: `change-risk-assessor`**
 
@@ -336,7 +350,7 @@ Go to **Builder → Hooks** and create these hooks manually.
 - **Tool matcher:** `.*create_index.*|.*update_data.*|.*delete_data.*|.*insert_data.*`
 - **Timeout:** `30`
 - **Fail mode:** `Allow`
-- **Prompt:** paste only the text under `prompt: |` from `sre-config/agent1/hooks/change-risk-assessor.yaml`. Do not paste the full YAML file.
+- **Source:** [`sre-config/agent1/hooks/change-risk-assessor.yaml`](sre-config/agent1/hooks/change-risk-assessor.yaml)
 
 **Hook 2: `sql-write-guard`**
 
@@ -348,17 +362,11 @@ Go to **Builder → Hooks** and create these hooks manually.
 - **Tool matcher:** `.*sql.*|.*SQL.*|.*mssql.*`
 - **Timeout:** `30`
 - **Fail mode:** `Allow`
-- **Script:** paste only the Python script under `script: |` from `sre-config/agent1/hooks/sql-write-guard.yaml`. Do not paste the full YAML file.
+- **Source:** [`sre-config/agent1/hooks/sql-write-guard.yaml`](sre-config/agent1/hooks/sql-write-guard.yaml)
 
-The `sre-config/agent1/` folder also contains the skill and custom-agent YAML files for source control. In this portal-first lab, the SQL MCP connector and Azure Monitor response plans are the important runtime pieces; create the hooks above for safety and governance.
+Manual fallback: if the REST call fails, create the hooks in **Builder → Hooks** and copy only the `prompt: |` block for `change-risk-assessor` and only the `script: |` block for `sql-write-guard`. Do not paste the full YAML file into either portal field.
 
-Optional: if `srectl` is installed **and** you found the agent context/ID from the agent's settings or CLI setup page, you can apply the repo YAML automatically with:
-
-```powershell
-./sre-config/setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id "<agent-id-or-srectl-context>"
-```
-
-If you do not see an Agent ID in the portal, keep going with the portal UI. The ID is not required for Scenarios 1–3 as long as you manually add the SQL MCP connector and Azure Monitor incident response plans.
+The broader [`sre-config/agent1/`](sre-config/agent1/) folder also contains skills, custom-agent YAML, tools, and scheduled tasks for source control. Those make the demo richer when `srectl` is available, but the hooks above are the core governance layer for safe SQL remediation.
 
 ---
 
@@ -519,7 +527,7 @@ Requires a free [ServiceNow PDI](https://developer.servicenow.com/) plus a secon
 2. Apply Agent 2 config:
 
    ```powershell
-   srectl config set-context <agent-2-id>
+   srectl config set-context /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-2-name>
    srectl apply -f sre-config/agent2/agents/
    srectl apply -f sre-config/agent2/tools/
    ```
@@ -565,7 +573,7 @@ az sql server firewall-rule create -g $ResourceGroup -s "sql-$Prefix" -n MyIP --
 Confirm the MCP connector status is **Connected**, the alert handler is linked to the right alert rule, and that `setup-scenarios-1-3.ps1` reported success applying skills/hooks/agents.
 
 **`srectl` not found**
-Install it from the **CLI** link in the SRE Agent portal. No winget/choco package today. The setup script still validates the deployment and prints the commands to apply later.
+Install it with `dotnet tool install sreagent.cli --global`, then reopen PowerShell if your PATH does not pick up .NET global tools immediately. If NuGet cannot find `sreagent.cli`, open the **CLI** link in the SRE Agent portal and confirm any required package source. The setup script still validates the deployment and prints the commands to apply later.
 
 **Connection string drift after Scenario 3**
 If Scenario 3 leaves the app broken, restore it manually:

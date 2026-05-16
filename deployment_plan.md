@@ -402,11 +402,15 @@ Scenario 1-3 requirements:
 | 2. Blocking Chain | Agent 1, SQL MCP connector, blocking diagnosis/fix skills, change-risk and SQL write hooks. |
 | 3. Bad Deployment | Agent 1, Azure Monitor incident response plan matching the health-check alert, and GitHub MCP if commit/PR/issue analysis is desired. |
 
-Install or verify `srectl`:
+Optional: install or verify `srectl` if you want the helper to apply skills, custom agents, tools, and scheduled tasks in addition to hooks:
 
 ```powershell
+dotnet tool install sreagent.cli --global
+srectl --version
 Get-Command srectl -ErrorAction SilentlyContinue
 ```
+
+If `dotnet tool install` cannot find `sreagent.cli`, open the SRE Agent portal's CLI instructions and confirm any required package source.
 
 Create Agent 1 in `sre.azure.com`:
 
@@ -453,21 +457,28 @@ Environment variable: GITHUB_PERSONAL_ACCESS_TOKEN
 Value: <github-pat>
 ```
 
-Apply and validate Agent 1 config for Scenarios 1-3:
+Apply and validate Agent 1 config for Scenarios 1-3. The helper auto-detects a single SRE Agent in the resource group and deploys the repo hooks through the SRE Agent data-plane API:
+
+```powershell
+.\sre-config\setup-scenarios-1-3.ps1 `
+  -ResourceGroup $ResourceGroup `
+  -Prefix $Prefix
+```
+
+If the resource group has multiple SRE Agents, pass the target agent's full ARM resource ID as `SreAgent1Id`, not a conversation/thread ID:
 
 ```powershell
 .\sre-config\setup-scenarios-1-3.ps1 `
   -ResourceGroup $ResourceGroup `
   -Prefix $Prefix `
-  -SreAgent1Id '<agent-1-id>'
+  -SreAgent1Id '/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-name>'
 ```
 
-The helper validates the deployed resources, prints connector values with placeholders instead of secrets, and applies these Agent 1 assets when `srectl` is available:
+The helper validates the deployed resources, prints connector values with placeholders instead of secrets, deploys hooks from `sre-config/agent1/hooks/` through REST, and applies these remaining Agent 1 assets when `srectl` is available:
 
 ```powershell
-srectl config set-context <agent-1-id>
+srectl config set-context /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-name>
 srectl apply -f sre-config/agent1/skills/
-srectl apply -f sre-config/agent1/hooks/
 srectl apply -f sre-config/agent1/agents/
 srectl apply -f sre-config/agent1/tools/
 srectl apply -f sre-config/agent1/scheduledtasks/
@@ -489,7 +500,7 @@ $env:ZAVA_DTU_ALERT_NAME = $DtuAlertName
 Agent 2 is only needed for Scenario 4, which this runbook skips by default. If Scenario 4 is later enabled, create/select Agent 2 in the SRE Agent portal and apply its config:
 
 ```powershell
-srectl config set-context <agent-2-id>
+srectl config set-context /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-2-name>
 srectl apply -f sre-config/agent2/agents/
 srectl apply -f sre-config/agent2/tools/
 ```

@@ -175,7 +175,7 @@ The **Capabilities → Tools** page shows tools that are already connected. If i
    | Command | `npx` |
    | Arguments | Add two argument rows: `-y` and `mssql-mcp@latest` |
 
-   If the portal accepts only one argument row, use `-y mssql-mcp@latest`.
+   Do not put `-y mssql-mcp@latest` in one row. The portal passes each row as one argument, and `npx` fails if both values are combined.
 
 6. Add these environment variables:
 

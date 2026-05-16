@@ -400,7 +400,7 @@ Scenario 1-3 requirements:
 | --- | --- |
 | 1. Slow Query | Agent 1, SQL MCP connector, DTU alert handler, SQL diagnosis/fix skills, change-risk and SQL write hooks. |
 | 2. Blocking Chain | Agent 1, SQL MCP connector, blocking diagnosis/fix skills, change-risk and SQL write hooks. |
-| 3. Bad Deployment | Agent 1 HTTP trigger and deployment-validator extended agent. GitHub MCP is optional for commit/PR/issue analysis. |
+| 3. Bad Deployment | Agent 1, Azure Monitor incident response plan matching the health-check alert, and GitHub MCP if commit/PR/issue analysis is desired. |
 
 Install or verify `srectl`:
 
@@ -422,7 +422,7 @@ Add the SQL MCP connector to Agent 1:
 Name / connection ID: zava-sql
 Transport: stdio
 Command: npx
-Arguments: -y mssql-mcp@latest
+Arguments: two rows: -y and mssql-mcp@latest
 Environment variables:
   DB_SERVER=<sql-server>.database.windows.net
   DB_DATABASE=<sql-database>
@@ -433,16 +433,16 @@ Environment variables:
   DB_TRUST_SERVER_CERTIFICATE=false
 ```
 
-For Scenario 1, link Agent 1 to the deployed DTU alert rule:
+For Scenario 1, create an Azure Monitor incident response plan matching the deployed DTU alert rule:
 
 ```powershell
 $DtuAlertName
 ```
 
-For Scenario 3, create an Agent 1 HTTP trigger and save the trigger URL only in your local shell/session:
+For Scenario 3, create another Azure Monitor incident response plan matching the health-check alert rule:
 
 ```powershell
-$env:ZAVA_SRE_HTTP_TRIGGER_URL = '<agent-1-http-trigger-url>'
+$HealthAlertName
 ```
 
 If GitHub analysis is part of the Scenario 3 demo, add the GitHub MCP connector to Agent 1:
@@ -459,8 +459,7 @@ Apply and validate Agent 1 config for Scenarios 1-3:
 .\sre-config\setup-scenarios-1-3.ps1 `
   -ResourceGroup $ResourceGroup `
   -Prefix $Prefix `
-  -SreAgent1Id '<agent-1-id>' `
-  -HttpTriggerUrl $env:ZAVA_SRE_HTTP_TRIGGER_URL
+  -SreAgent1Id '<agent-1-id>'
 ```
 
 The helper validates the deployed resources, prints connector values with placeholders instead of secrets, and applies these Agent 1 assets when `srectl` is available:
@@ -485,7 +484,6 @@ $env:ZAVA_SQL_PASSWORD = $SqlPassword
 $env:ZAVA_APP_NAME = $MainApp
 $env:ZAVA_APP_URL = "https://$MainApp.azurewebsites.net"
 $env:ZAVA_DTU_ALERT_NAME = $DtuAlertName
-$env:ZAVA_SRE_HTTP_TRIGGER_URL = '<agent-1-http-trigger-url>'
 ```
 
 Agent 2 is only needed for Scenario 4, which this runbook skips by default. If Scenario 4 is later enabled, create/select Agent 2 in the SRE Agent portal and apply its config:

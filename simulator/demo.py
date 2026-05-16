@@ -421,7 +421,7 @@ def _restart_app():
 
 def _post_sre_http_trigger(payload: dict, timeline=None):
     if not SRE_HTTP_TRIGGER_URL:
-        message = "SRE HTTP trigger not configured. Set ZAVA_SRE_HTTP_TRIGGER_URL after creating the Agent 1 HTTP trigger."
+        message = "SRE HTTP trigger not configured; relying on Azure Monitor health-check alert if response plan is configured."
         if timeline:
             timeline.add(message, "yellow")
         return None
@@ -496,9 +496,9 @@ def show_menu():
         "SRE Agent reads ticket, checks warranty, fills form.",
     )
     tbl.add_row(
-        "5", "📡  Simulate HTTP Trigger",
-        "Inject bad config + fire HTTP trigger.\n"
-        "SRE Agent detects & restores config.",
+        "5", "🏥  Simulate Health Alert",
+        "Inject bad config and let health-check alert fire.\n"
+        "SRE Agent investigates via Azure Monitor.",
     )
     tbl.add_row(
         "6", "🎯  Simulate All",

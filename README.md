@@ -154,7 +154,7 @@ This is the Zava Azure Friday SRE Agent demo environment. The three web apps are
 
 The main workload is app-<prefix> backed by Azure SQL Database sqldb-<prefix> on sql-<prefix>. Scenarios 1-3 intentionally create SQL performance, SQL blocking, and bad deployment failures so you can diagnose and remediate them.
 
-Use Azure Monitor alerts, Application Insights, Log Analytics, the SQL MCP connector, and the HTTP trigger to investigate the demo. The preferred behavior is to explain findings clearly, ask before risky changes, and validate health after remediation.
+Use Azure Monitor alerts, Application Insights, Log Analytics, and the SQL MCP connector to investigate the demo. The preferred behavior is to explain findings clearly, ask before risky changes, and validate health after remediation.
 ```
 
 The portal may not show an Agent ID during this flow. That is OK. You only need the Agent ID if you plan to use `srectl` to apply repo config from the command line. For a portal-only setup, continue with Step 2.
@@ -224,7 +224,7 @@ With GitHub connected, the SRE Agent can answer:
 - Which file is the most likely cause of the failed deployment?
 - Are there related pull requests, workflow runs, or deployment records?
 
-Without GitHub connected, Scenario 3 can still use Azure Monitor, App Service settings, App Insights, Log Analytics, and the HTTP trigger. It just will not inspect repository history.
+Without GitHub connected, Scenario 3 can still use Azure Monitor, App Service settings, App Insights, and Log Analytics. It just will not inspect repository history.
 
 #### Create a fine-grained GitHub PAT
 
@@ -293,12 +293,23 @@ The important one for Scenario 1 is `alert-<prefix>-dtu-high`. Azure SRE Agent s
 
 If alerts do not appear later, verify that the agent's managed identity has **Monitoring Contributor** on the subscription/resource group and that `rg-zava-<suffix>` is included in the agent's managed Azure resources.
 
-### Step 5 — Create the HTTP trigger (Scenario 3)
+### Step 5 — Add the Scenario 3 health-check response plan
 
-In the agent's **Triggers** blade:
+The current portal flow does not expose a separate **Triggers** blade. Use Azure Monitor as the trigger source for Scenario 3 too.
 
-1. **Create HTTP trigger**, name it `bad-deployment`.
-2. Copy the **Trigger URL** and **Audience** — you'll set them as env vars in Part 3.
+1. Go to **Builder → Incident response plans**.
+2. Create another response plan:
+   - **Incident response plan name:** `zava-health-response-plan`
+   - **Severity:** `All severity`
+   - **Title contains:** `alert-<prefix>-health-check`
+   - Leave **Title does not contain** empty.
+   - Leave **I want a custom response plan** unchecked for the first run.
+   - **Agent autonomy:** choose **Review**.
+   - **Run deep investigation:** leave unchecked for the first run.
+   - **Alert reinvestigation cooldown:** leave enabled at `3` hours.
+3. Save the response plan.
+
+When Scenario 3 breaks the app's database connection string, `/health` returns 503, App Service health check fails, `alert-<prefix>-health-check` fires, and SRE Agent starts an incident investigation through Azure Monitor.
 
 ### Step 6 — Apply the skills, hooks, and agents from this repo
 
@@ -307,8 +318,7 @@ The `sre-config/agent1/` folder ships the skills (`sql-query-diagnosis`, `sql-bl
 ```powershell
 ./sre-config/setup-scenarios-1-3.ps1 `
   -ResourceGroup $ResourceGroup `
-  -Prefix $Prefix `
-  -HttpTriggerUrl "<trigger-url-from-step-5>"
+   -Prefix $Prefix
 ```
 
 This validates the workload and prints the connector values you need. If `srectl` is installed **and** you found the agent context/ID from the agent's settings or CLI setup page, rerun with `-SreAgent1Id`:
@@ -317,11 +327,10 @@ This validates the workload and prints the connector values you need. If `srectl
 ./sre-config/setup-scenarios-1-3.ps1 `
   -ResourceGroup $ResourceGroup `
   -Prefix $Prefix `
-  -SreAgent1Id "<agent-id-or-srectl-context>" `
-  -HttpTriggerUrl "<trigger-url-from-step-5>"
+   -SreAgent1Id "<agent-id-or-srectl-context>"
 ```
 
-If you do not see an Agent ID in the portal, keep going with the portal UI. The ID is not required for Scenarios 1–3 as long as you manually add the SQL MCP connector, alert handlers, and HTTP trigger.
+If you do not see an Agent ID in the portal, keep going with the portal UI. The ID is not required for Scenarios 1–3 as long as you manually add the SQL MCP connector and Azure Monitor incident response plans.
 
 ---
 
@@ -346,9 +355,7 @@ $env:ZAVA_APP_NAME       = "app-$Prefix"
 $env:ZAVA_APP_URL        = "https://app-$Prefix.azurewebsites.net"
 $env:ZAVA_DTU_ALERT_NAME = "alert-$Prefix-dtu-high"
 
-# Scenario 3 only:
-$env:ZAVA_SRE_HTTP_TRIGGER_URL      = "<trigger-url-from-Part-2-step-5>"
-$env:ZAVA_SRE_HTTP_TRIGGER_AUDIENCE = "<audience-from-Part-2-step-5>"
+# Scenario 3 uses the Azure Monitor health-check alert; no HTTP trigger is required.
 ```
 
 ---
@@ -437,8 +444,9 @@ python simulator/demo.py 2
 ```mermaid
 flowchart LR
     SIM[Simulator #3<br/>push bad config]:::input -->|breaks| APP[App Service<br/>health = 503]:::bad
-    SIM -->|webhook| SRE[SRE Agent 1<br/>HTTP trigger]:::agent
-    SRE --> VAL[deployment-validator<br/>check /health + diff]:::skill
+   APP -->|health alert fires| MON[Azure Monitor<br/>health-check alert]:::warn
+   MON -->|incident response plan| SRE[SRE Agent 1<br/>Review mode]:::agent
+   SRE --> VAL[Investigate<br/>check /health + logs]:::skill
     VAL -.optional.-> GH[GitHub MCP<br/>commit diff]:::warn
     VAL --> FIX[Restore good config<br/>restart App Service]:::fix
     FIX -.applied.-> APP
@@ -452,11 +460,11 @@ flowchart LR
 
 > Source: [`docs/diagrams/scenario-3-bad-deployment.excalidraw`](docs/diagrams/scenario-3-bad-deployment.excalidraw)
 
-**Prerequisite:** `ZAVA_SRE_HTTP_TRIGGER_URL` and `ZAVA_SRE_HTTP_TRIGGER_AUDIENCE` env vars set (from Part 2 Step 5).
+**Prerequisite:** `zava-health-response-plan` exists and matches `alert-<prefix>-health-check`.
 
 **What breaks.** Simulator overwrites the App Service `ConnectionStrings__DefaultConnection` setting with a bad SQL server name and restarts the app. `/health` returns 503.
 
-**What the agent does.** Simulator posts to the HTTP trigger → SRE Agent runs `deployment-validator` → it hits `/health`, sees 503 → (optional) inspects recent commits via GitHub MCP → restores the working connection string → restarts the app → confirms `/health` returns 200.
+**What the agent does.** App health check fails → Azure Monitor fires `alert-<prefix>-health-check` → SRE Agent starts an incident investigation → it hits `/health`, sees 503 → checks App Service settings/logs → (optional) inspects recent commits via GitHub MCP → proposes restoring the working connection string → after approval, restarts the app and confirms `/health` returns 200.
 
 **Run:**
 
@@ -468,9 +476,10 @@ python simulator/demo.py 3
 **Watch for:**
 
 1. App health → 503.
-2. SRE Agent activity feed shows `deployment-validator` running.
-3. Agent restores the connection string and restarts the app.
-4. App health → 200.
+2. Azure Monitor fires `alert-<prefix>-health-check`.
+3. SRE Agent opens an incident investigation in Review mode.
+4. Agent proposes restoring the connection string and restarting the app.
+5. App health → 200.
 
 ---
 

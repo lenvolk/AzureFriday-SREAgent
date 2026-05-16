@@ -283,7 +283,7 @@ Write-Host "       Arguments:  -y mssql-mcp@latest" -ForegroundColor DarkGray
 Write-Host "       Env vars:   DB_SERVER, DB_DATABASE, DB_USER, DB_PASSWORD, DB_PORT, DB_ENCRYPT, DB_TRUST_SERVER_CERTIFICATE" -ForegroundColor DarkGray
 Write-Host "     • GitHub MCP: @github/github-mcp-server" -ForegroundColor Gray
 Write-Host "       Env vars:   GITHUB_PERSONAL_ACCESS_TOKEN" -ForegroundColor DarkGray
-Write-Host "     • HTTP trigger for Scenario 3; set ZAVA_SRE_HTTP_TRIGGER_URL before running simulator option 3" -ForegroundColor Gray
+Write-Host "     • Azure Monitor response plans: DTU alert for Scenario 1 and health-check alert for Scenario 3" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  3. Prepare Scenarios 1-3 after creating Agent 1:" -ForegroundColor White
 Write-Host "     .\sre-config\setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id <agent-1-id>" -ForegroundColor Gray

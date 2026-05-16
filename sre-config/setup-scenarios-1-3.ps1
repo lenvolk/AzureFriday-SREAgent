@@ -19,8 +19,8 @@
     script applies Scenario 1-3 skills, hooks, tools, and extended agents.
 
 .PARAMETER HttpTriggerUrl
-    Agent 1 HTTP trigger URL for Scenario 3. If provided, the script prints the
-    simulator environment variable to use. It is not written to disk.
+    Optional legacy Agent 1 HTTP trigger URL for Scenario 3. Current portal
+    setup uses Azure Monitor health-check alerts instead.
 #>
 
 [CmdletBinding()]
@@ -85,8 +85,8 @@ Write-Host '    DB_PORT=1433' -ForegroundColor DarkGray
 Write-Host '    DB_ENCRYPT=true' -ForegroundColor DarkGray
 Write-Host '    DB_TRUST_SERVER_CERTIFICATE=false' -ForegroundColor DarkGray
 Write-Host ''
-Write-Host 'For Scenario 3, create an HTTP trigger on Agent 1 and set:' -ForegroundColor White
-Write-Host '  ZAVA_SRE_HTTP_TRIGGER_URL=<agent-http-trigger-url>' -ForegroundColor Gray
+Write-Host 'For Scenario 3, create an Azure Monitor response plan matching:' -ForegroundColor White
+Write-Host "  $HealthAlertName" -ForegroundColor Gray
 Write-Host 'Optional GitHub MCP connector for deployment-validator:' -ForegroundColor White
 Write-Host '  Package: @github/github-mcp-server' -ForegroundColor Gray
 Write-Host '  Environment variable: GITHUB_PERSONAL_ACCESS_TOKEN=<github-pat>' -ForegroundColor Gray
@@ -117,13 +117,12 @@ Write-Host "`$env:ZAVA_APP_NAME = '$MainApp'"
 Write-Host "`$env:ZAVA_APP_URL = '$MainAppUrl'"
 Write-Host "`$env:ZAVA_DTU_ALERT_NAME = '$DtuAlertName'"
 if ($HttpTriggerUrl) {
+    Write-Host '# Optional legacy HTTP trigger path:'
     Write-Host "`$env:ZAVA_SRE_HTTP_TRIGGER_URL = '$HttpTriggerUrl'"
-} else {
-    Write-Host "`$env:ZAVA_SRE_HTTP_TRIGGER_URL = '<agent-1-http-trigger-url>'"
 }
 
 Write-Host ''
 Write-Host 'Scenario readiness:' -ForegroundColor White
-Write-Host '  Scenario 1: needs Agent 1 + SQL MCP + DTU alert handler.' -ForegroundColor Gray
+Write-Host '  Scenario 1: needs Agent 1 + SQL MCP + Azure Monitor response plan for DTU alert.' -ForegroundColor Gray
 Write-Host '  Scenario 2: needs Agent 1 + SQL MCP.' -ForegroundColor Gray
-Write-Host '  Scenario 3: needs Agent 1 HTTP trigger; GitHub MCP is optional for deeper commit analysis.' -ForegroundColor Gray
+Write-Host '  Scenario 3: needs Azure Monitor response plan for health-check alert; GitHub MCP is optional for deeper commit analysis.' -ForegroundColor Gray

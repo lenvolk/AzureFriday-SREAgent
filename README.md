@@ -277,6 +277,9 @@ The portal no longer has a separate **Alert Handlers** blade. Azure Monitor aler
    - **Title contains:** start with `alert-<prefix>-dtu-high` for Scenario 1.
    - Leave **Title does not contain** empty.
    - Leave **I want a custom response plan** unchecked for the first run.
+   - **Agent autonomy:** choose **Review** for the first demo run so the agent proposes SQL changes before applying them.
+   - **Run deep investigation:** leave unchecked for the first run.
+   - **Alert reinvestigation cooldown:** leave enabled at `3` hours to avoid duplicate investigations during repeated load tests.
 
    Add `alert-<prefix>-http-5xx` and `alert-<prefix>-health-check` later if you want the same response plan to catch web/app-health failures too. Starting with only the DTU alert keeps Scenario 1 easy to validate.
 

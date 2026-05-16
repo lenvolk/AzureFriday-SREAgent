@@ -199,7 +199,7 @@ The **Capabilities → Tools** page shows tools that are already connected. If i
 
 7. For **Managed identity**, choose **None**. This MCP server uses SQL authentication from the `DB_*` environment variables; the agent's managed identity is not used for this connector.
 
-8. Save/add the connector and wait for status **Connected**.
+8. Save/add the connector and wait for status **Connected**. In **Builder → Connectors**, you should see `zava-sql` with a green **Connected** status.
 9. When the tool picker appears, select these SQL tools:
    - `mssql_connection_status`
    - `mssql_list_schema_objects`

@@ -325,6 +325,15 @@ This validates the workload and prints the connector values you need. If `srectl
 ./sre-config/setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id "<agent-id-or-srectl-context>"
 ```
 
+If the script prints `srectl is not installed`, it only validated Azure and printed setup values; it did **not** upload hooks, skills, or custom agents into SRE Agent. In that case, create the hooks manually from **Builder → Hooks**:
+
+| Hook | Type | Event | Matcher | Source |
+| --- | --- | --- | --- | --- |
+| `change-risk-assessor` | Prompt | `PostToolUse` | `.*create_index.*|.*update_data.*|.*delete_data.*|.*insert_data.*` | `sre-config/agent1/hooks/change-risk-assessor.yaml` |
+| `sql-write-guard` | Command | `PostToolUse` | `.*sql.*|.*SQL.*|.*mssql.*` | `sre-config/agent1/hooks/sql-write-guard.yaml` |
+
+For both hooks, set **Activation mode** to `Always` and **Timeout** to `30` seconds. Paste the prompt or command script from the source YAML file into the portal form.
+
 If you do not see an Agent ID in the portal, keep going with the portal UI. The ID is not required for Scenarios 1–3 as long as you manually add the SQL MCP connector and Azure Monitor incident response plans.
 
 ---

@@ -105,6 +105,20 @@ def get_sql_connection(login_timeout=10):
     if not HAS_PYMSSQL:
         console.print("[red]pymssql not installed. Run: pip install pymssql[/]")
         return None
+    required_env = {
+        "ZAVA_SQL_SERVER": SQL_SERVER,
+        "ZAVA_SQL_DATABASE": SQL_DATABASE,
+        "ZAVA_SQL_USER": SQL_USER,
+        "ZAVA_SQL_PASSWORD": SQL_PASSWORD,
+    }
+    missing = [name for name, value in required_env.items() if not value or value.startswith("<")]
+    if missing:
+        console.print("[red]SQL environment is not configured for this terminal.[/]")
+        console.print("[yellow]Set these variables before running the simulator:[/]")
+        for name in missing:
+            console.print(f"  [cyan]$env:{name}[/]")
+        console.print("[dim]Tip: rerun sre-config/setup-scenarios-1-3.ps1 to print the exact values.[/]")
+        return None
     try:
         return pymssql.connect(
             server=SQL_SERVER,

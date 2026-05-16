@@ -262,15 +262,26 @@ Treat the PAT like a password. Do not paste it into chat, commit it, screenshot 
 
 Delete the PAT from GitHub after the demo if you no longer need repo investigation.
 
-### Step 4 — Wire alert handlers (Scenarios 1 & 2)
+### Step 4 — Connect Azure Monitor alerts (Scenarios 1 & 2)
 
-In the agent's **Alert Handlers** blade, link these three rules from `rg-zava-<suffix>`:
+The portal no longer has a separate **Alert Handlers** blade. Azure Monitor alerts are connected as an incident platform.
+
+1. Go to **Builder → Incident platform**.
+2. Select **Azure Monitor**.
+3. Save the incident platform.
+4. If the portal offers a **Quickstart response plan**, enable/create it.
+5. Go to **Builder → Incident response plans**.
+6. Confirm there is a response plan for Azure Monitor alerts. For this demo, make sure it includes the severities used by the deployed alert rules.
+
+The Bicep deployment creates these alert rules in `rg-zava-<suffix>`:
 
 - `alert-<prefix>-dtu-high`
 - `alert-<prefix>-http-5xx`
 - `alert-<prefix>-health-check`
 
-The agent now activates automatically when any of them fires.
+The important one for Scenario 1 is `alert-<prefix>-dtu-high`. Azure SRE Agent scans Azure Monitor every minute and starts an investigation when a matching alert fires.
+
+If alerts do not appear later, verify that the agent's managed identity has **Monitoring Contributor** on the subscription/resource group and that `rg-zava-<suffix>` is included in the agent's managed Azure resources.
 
 ### Step 5 — Create the HTTP trigger (Scenario 3)
 

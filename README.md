@@ -169,35 +169,47 @@ The **Capabilities → Tools** page shows tools that are already connected. If i
 4. Choose **stdio** / local process if prompted for transport.
 5. Fill in:
 
-  | Field | Value |
-  |-------|-------|
-  | Name / connection ID | `zava-sql` |
-  | Command | `npx` |
-  | Arguments | `-y mssql-mcp@latest` |
+   | Field | Value |
+   |-------|-------|
+   | Name / connection ID | `zava-sql` |
+   | Command | `npx` |
+   | Arguments | Add two argument rows: `-y` and `mssql-mcp@latest` |
+
+   If the portal accepts only one argument row, use `-y mssql-mcp@latest`.
 
 6. Add these environment variables:
 
-  | Variable | Value |
-  |----------|-------|
-  | `DB_SERVER` | `sql-<prefix>.database.windows.net` |
-  | `DB_DATABASE` | `sqldb-<prefix>` |
-  | `DB_USER` | `sqladmin` |
-  | `DB_PASSWORD` | the SQL admin password you entered during deployment, or the new password you reset above |
-  | `DB_PORT` | `1433` |
-  | `DB_ENCRYPT` | `true` |
-  | `DB_TRUST_SERVER_CERTIFICATE` | `false` |
+   | Variable | Value |
+   |----------|-------|
+   | `DB_SERVER` | `sql-<prefix>.database.windows.net` |
+   | `DB_DATABASE` | `sqldb-<prefix>` |
+   | `DB_USER` | `sqladmin` |
+   | `DB_PASSWORD` | the SQL admin password you entered during deployment, or the new password you reset above |
+   | `DB_PORT` | `1433` |
+   | `DB_ENCRYPT` | `true` |
+   | `DB_TRUST_SERVER_CERTIFICATE` | `false` |
 
-7. Save/add the connector and wait for status **Connected**.
-8. When the tool picker appears, select these SQL tools:
-  - `mssql_connection_status`
-  - `mssql_list_schema_objects`
-  - `mssql_describe_table_columns`
-  - `mssql_read_table_rows`
-  - `mssql_run_sql_query`
-  - `mssql_execute_stored_procedure`
+   Example for a deployment with prefix `zava-lv514c`:
 
-  `mssql_run_sql_query` is needed because Scenario 1 creates an index and Scenario 2 may kill a blocking session. Keep the agent in approval mode for risky SQL changes.
-9. Go back to **Capabilities → Tools → MCP servers + services**. You should now see `zava-sql` and several active SQL tools.
+   | Variable | Value |
+   |----------|-------|
+   | `DB_SERVER` | `sql-zava-lv514c.database.windows.net` |
+   | `DB_DATABASE` | `sqldb-zava-lv514c` |
+   | `DB_USER` | `sqladmin` |
+
+7. For **Managed identity**, choose **None**. This MCP server uses SQL authentication from the `DB_*` environment variables; the agent's managed identity is not used for this connector.
+
+8. Save/add the connector and wait for status **Connected**.
+9. When the tool picker appears, select these SQL tools:
+   - `mssql_connection_status`
+   - `mssql_list_schema_objects`
+   - `mssql_describe_table_columns`
+   - `mssql_read_table_rows`
+   - `mssql_run_sql_query`
+   - `mssql_execute_stored_procedure`
+
+   `mssql_run_sql_query` is needed because Scenario 1 creates an index and Scenario 2 may kill a blocking session. Keep the agent in approval mode for risky SQL changes.
+10. Go back to **Capabilities → Tools → MCP servers + services**. You should now see `zava-sql` and several active SQL tools.
 
 If you reset the SQL password after deployment, update the main app connection string as shown in Part 1 so `/health` continues to work.
 

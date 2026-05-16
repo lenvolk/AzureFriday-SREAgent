@@ -316,18 +316,13 @@ When Scenario 3 breaks the app's database connection string, `/health` returns 5
 The `sre-config/agent1/` folder ships the skills (`sql-query-diagnosis`, `sql-blocking-fix`, …), hooks (`change-risk-assessor`, `sql-write-guard`), and the `deployment-validator` agent. Apply them via the helper script:
 
 ```powershell
-./sre-config/setup-scenarios-1-3.ps1 `
-  -ResourceGroup $ResourceGroup `
-   -Prefix $Prefix
+./sre-config/setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix
 ```
 
 This validates the workload and prints the connector values you need. If `srectl` is installed **and** you found the agent context/ID from the agent's settings or CLI setup page, rerun with `-SreAgent1Id`:
 
 ```powershell
-./sre-config/setup-scenarios-1-3.ps1 `
-  -ResourceGroup $ResourceGroup `
-  -Prefix $Prefix `
-   -SreAgent1Id "<agent-id-or-srectl-context>"
+./sre-config/setup-scenarios-1-3.ps1 -ResourceGroup $ResourceGroup -Prefix $Prefix -SreAgent1Id "<agent-id-or-srectl-context>"
 ```
 
 If you do not see an Agent ID in the portal, keep going with the portal UI. The ID is not required for Scenarios 1–3 as long as you manually add the SQL MCP connector and Azure Monitor incident response plans.

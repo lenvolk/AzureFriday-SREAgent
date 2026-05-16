@@ -75,7 +75,7 @@ Write-Host 'Create/select Agent 1 in https://sre.azure.com, attached to the demo
 Write-Host 'Add SQL MCP connector:' -ForegroundColor White
 Write-Host '  Package: mssql-mcp@latest' -ForegroundColor Gray
 Write-Host '  Command: npx' -ForegroundColor Gray
-Write-Host '  Arguments: -y mssql-mcp@latest' -ForegroundColor Gray
+Write-Host '  Arguments: two rows: -y and mssql-mcp@latest' -ForegroundColor Gray
 Write-Host '  Environment variables:' -ForegroundColor Gray
 Write-Host "    DB_SERVER=$SqlServer.database.windows.net" -ForegroundColor DarkGray
 Write-Host "    DB_DATABASE=$SqlDatabase" -ForegroundColor DarkGray

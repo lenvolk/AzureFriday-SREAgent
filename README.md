@@ -119,7 +119,13 @@ Azure SRE Agent has **no ARM / Bicep / `az` creation path** today. You'll create
     The Bicep deployment already creates Application Insights as `ai-<prefix>` and connects all three apps to it, so you do **not** need the SRE Agent wizard to create a second one. If `ai-<prefix>` is not listed, first confirm the Application Insights subscription is the same subscription from Part 1. Use **Create new** only if your SRE Agent tenant does not allow selecting the demo App Insights resource.
 4. Click **Next**, review the settings, then click **Deploy**.
 5. Wait for provisioning to finish.
-6. Copy the **Agent ID** shown after provisioning — you need it in Step 5.
+6. If the **More context. Better investigations.** screen appears:
+  - Click **Azure resources** and add/select `rg-zava-<suffix>`.
+  - Click **Logs** and select the demo Log Analytics / App Insights resources if shown.
+  - Click **Code** if you want Scenario 3 to inspect this GitHub repo.
+  - Click **Done and go to agent** when finished.
+
+The portal may not show an Agent ID during this flow. That is OK. You only need the Agent ID if you plan to use `srectl` to apply repo config from the command line. For a portal-only setup, continue with Step 2.
 
 ### Step 2 — Attach the SQL MCP connector (required for Scenarios 1 & 2)
 
@@ -164,12 +170,20 @@ The `sre-config/agent1/` folder ships the skills (`sql-query-diagnosis`, `sql-bl
 ./sre-config/setup-scenarios-1-3.ps1 `
   -ResourceGroup $ResourceGroup `
   -Prefix $Prefix `
-  -SreAgent1Id "<agent-id-from-step-1>" `
   -HttpTriggerUrl "<trigger-url-from-step-5>"
 ```
 
-- If `srectl` is installed, it applies everything.
-- If not, the script validates the workload and prints the exact `srectl apply` commands for later.
+This validates the workload and prints the connector values you need. If `srectl` is installed **and** you found the agent context/ID from the agent's settings or CLI setup page, rerun with `-SreAgent1Id`:
+
+```powershell
+./sre-config/setup-scenarios-1-3.ps1 `
+  -ResourceGroup $ResourceGroup `
+  -Prefix $Prefix `
+  -SreAgent1Id "<agent-id-or-srectl-context>" `
+  -HttpTriggerUrl "<trigger-url-from-step-5>"
+```
+
+If you do not see an Agent ID in the portal, keep going with the portal UI. The ID is not required for Scenarios 1–3 as long as you manually add the SQL MCP connector, alert handlers, and HTTP trigger.
 
 ---
 

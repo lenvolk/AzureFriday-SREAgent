@@ -278,10 +278,24 @@ The portal no longer has a separate **Alert Handlers** blade. Azure Monitor aler
    - **Severity:** `All severity`
    - **Title contains:** start with `alert-<prefix>-dtu-high` for Scenario 1.
    - Leave **Title does not contain** empty.
-   - Leave **I want a custom response plan** unchecked for the first run.
+   - Check **I want a custom response plan** for Scenario 1.
    - **Agent autonomy:** choose **Review** for the first demo run so the agent proposes SQL changes before applying them.
    - **Run deep investigation:** leave unchecked for the first run.
    - **Alert reinvestigation cooldown:** leave enabled at `3` hours to avoid duplicate investigations during repeated load tests.
+
+   Use this custom response plan text:
+
+   ```text
+   This is Scenario 1 of the Zava SRE Agent demo: slow query caused by a missing index on dbo.Products.Category.
+
+   Do not close the incident only because the Azure Monitor alert auto-resolved or current DTU returned to baseline. The simulator may stop generating pressure before remediation is complete.
+
+   Investigate SQL Database sqldb-<prefix> on sql-<prefix>. Use the SQL MCP connector to verify whether dbo.Products has IX_Products_Category or another useful index on Category. If the index is missing, propose creating:
+
+   CREATE NONCLUSTERED INDEX IX_Products_Category ON dbo.Products(Category);
+
+   Run the change only after user approval. After the change, validate that the index exists and that Products.Category queries are faster. Then summarize the root cause and remediation.
+   ```
 
    Add `alert-<prefix>-http-5xx` and `alert-<prefix>-health-check` later if you want the same response plan to catch web/app-health failures too. Starting with only the DTU alert keeps Scenario 1 easy to validate.
 
@@ -435,8 +449,9 @@ python simulator/demo.py 1
 
 1. Simulator shows query latency ~800–2000 ms.
 2. Azure Portal → Monitor → Alerts: `alert-<prefix>-dtu-high` fires.
-3. SRE Agent activity feed shows skills running.
-4. Simulator detects `IX_Products_Category` and prints before/after.
+3. SRE Agent incident opens and asks for approval before SQL remediation.
+4. Approve creating `IX_Products_Category` if the agent confirms the index is missing.
+5. Simulator detects `IX_Products_Category` and prints before/after.
 5. Latency drops to ~5 ms.
 
 ---

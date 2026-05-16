@@ -454,6 +454,20 @@ $DtuAlertThreshold
 $DtuAlertWindowSize
 ```
 
+Use a custom response plan for Scenario 1. Do not rely on the default alert-closure behavior, because the synthetic DTU burst can auto-resolve before the missing index is fixed. The response plan should say:
+
+```text
+This is Scenario 1 of the Zava SRE Agent demo: slow query caused by a missing index on dbo.Products.Category.
+
+Do not close the incident only because the Azure Monitor alert auto-resolved or current DTU returned to baseline. The simulator may stop generating pressure before remediation is complete.
+
+Investigate SQL Database sqldb-<prefix> on sql-<prefix>. Use the SQL MCP connector to verify whether dbo.Products has IX_Products_Category or another useful index on Category. If the index is missing, propose creating:
+
+CREATE NONCLUSTERED INDEX IX_Products_Category ON dbo.Products(Category);
+
+Run the change only after user approval. After the change, validate that the index exists and that Products.Category queries are faster. Then summarize the root cause and remediation.
+```
+
 For Scenario 3, create another Azure Monitor incident response plan matching the health-check alert rule:
 
 ```powershell

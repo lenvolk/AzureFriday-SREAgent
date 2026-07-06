@@ -376,7 +376,7 @@ To verify in the portal, go to **Builder → Hooks** and confirm both hooks exis
 - **Name:** `change-risk-assessor`
 - **Event type:** `Post Tool Use`
 - **Activation mode:** `Always`
-- **Description:** `AI-powered risk assessment for SQL operations. Evaluates blast radius, business hours, and data sensitivity. Supports human-in-the-loop approval override.`
+- **Description:** `Strict human-in-the-loop gate. Blocks ALL state-changing SQL (CREATE, ALTER, DROP, TRUNCATE, INSERT, UPDATE, DELETE, KILL) until a human operator explicitly approves. Read-only operations pass through.`
 - **Hook type:** `Prompt`
 - **Model:** `Reasoning Fast`
 - **Tool matcher:** `.*mssql.*|.*sql.*`

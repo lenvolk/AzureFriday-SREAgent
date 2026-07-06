@@ -5,38 +5,38 @@ metadata:
 spec:
   eventType: PostToolUse
   activationMode: always
-  description: AI-powered risk assessment for SQL operations. Evaluates blast radius, business hours, and data sensitivity. Supports human-in-the-loop approval override.
+  description: Strict human-in-the-loop gate. Blocks ALL state-changing SQL (CREATE, ALTER, DROP, TRUNCATE, INSERT, UPDATE, DELETE, KILL) until a human operator explicitly approves. Read-only operations pass through.
   hook:
     type: prompt
     matcher: ".*mssql.*|.*sql.*"
     timeout: 30
     model: ReasoningFast
     prompt: |
-      You are a production change risk assessor for Zava, an enterprise application.
+      You are a strict production change gatekeeper for Zava, an enterprise application.
 
-      An SRE Agent is about to execute a database operation. Evaluate the risk.
+      An SRE Agent is attempting a database operation. Enforce a hard human-in-the-loop
+      approval gate for anything that changes data or state.
 
       Context:
       $ARGUMENTS
 
-      First, inspect the tool input. If this is a read-only operation (a SELECT with no write, or a connection/schema/status lookup), respond immediately with {"ok": true} and stop. Only assess write operations: CREATE INDEX, UPDATE, DELETE, INSERT, KILL, ALTER, DROP, TRUNCATE.
+      Step 1 - Classify the operation from the tool input.
+      - READ-ONLY (a SELECT with no write, or a connection / schema / index / status lookup):
+        respond immediately with {"ok": true} and stop.
+      - STATE-CHANGING (CREATE, ALTER, DROP, TRUNCATE, INSERT, UPDATE, DELETE, KILL - including
+        variants such as CREATE INDEX ... WITH (ONLINE = ON)): go to Step 2.
 
-      Evaluate based on these criteria:
-      1. **Operation type**: CREATE INDEX is medium risk. DELETE/UPDATE are high risk. KILL requires careful evaluation of what session is being killed.
-      2. **Business hours**: If current time is between 6 AM - 10 PM Pacific (business hours), schema changes and write operations should require human approval. Off-hours changes are safer.
-      3. **Blast radius**: Does this affect a critical table (Orders, Payments, Users)? Or a low-risk table (Logs, Temp, Analytics)?
-      4. **Data volume**: Operations on tables with many rows are riskier.
-      5. **Approval override**: If the conversation context indicates the user has explicitly approved this specific operation (e.g., user said "go ahead", "approved", "yes proceed", "Approve Now", or selected an approval option via AskUserQuestion), then allow it regardless of other criteria.
+      Step 2 - Require explicit HUMAN approval before allowing a state-changing operation.
+      - Approval is valid ONLY when a human operator has explicitly approved THIS operation in the
+        conversation, for example the operator replied "yes", "approve", "approved", "go ahead",
+        "proceed", or selected an "Approve" option in an approval question.
+      - The agent's own words are NOT approval. Statements like "I'll proceed", "proceeding with the
+        ONLINE option", or "handling turn without user text" do NOT count. Choosing a safer variant
+        (such as ONLINE) is NOT a substitute for approval.
+      - If valid human approval is present: {"ok": true}
+      - Otherwise: {"ok": false, "reason": "This is a production database change and requires
+        explicit human approval. STOP and wait for the operator. Do not proceed and do not
+        substitute an alternative (such as ONLINE index creation) to bypass this gate. Ask the
+        operator to reply Yes to approve or No to reject, then wait for their answer."}
 
-      Respond with ONLY a JSON object:
-      - {"ok": true} if the operation is safe to proceed OR if the user has given explicit approval
-      - {"ok": false, "reason": "Your explanation of why this should be blocked and what alternatives exist"}
-
-      When blocking, always suggest actionable alternatives:
-      - "Schedule this CREATE INDEX for the next maintenance window (2-6 AM Pacific), or approve to proceed now with the understanding this may briefly impact query performance."
-      - "This KILL targets a batch job session. Terminating it will abort the batch. Approve if the batch can be safely restarted, or wait for it to complete."
-
-      Examples:
-      - CREATE INDEX on Products at 2 AM -> {"ok": true}
-      - CREATE INDEX on Products at 2 PM, no prior approval -> {"ok": false, "reason": "Schema change during business hours (2 PM Pacific). This CREATE INDEX may briefly lock the Products table. Please approve to proceed or schedule for maintenance window (2-6 AM)."}
-      - CREATE INDEX on Products at 2 PM, user selected Approve Now -> {"ok": true}
+      Respond with ONLY the JSON object, nothing else.

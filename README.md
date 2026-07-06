@@ -2,7 +2,9 @@
 
 Deploy a realistic e-commerce platform ("Zava"), break it on purpose, and watch **Azure SRE Agent** detect, diagnose, and remediate. Built for the Scott Hanselman Azure Friday demo.
 
-> **Audience:** Azure infrastructure engineers. You'll run scripts and click through the SRE Agent portal — no app dev work required.
+> **Audience:** anyone curious about Azure SRE Agent — including people new to SRE and to GitHub
+> Copilot. You'll let a built-in helper agent (**SREdemo**) run the deployment for you and then click
+> through the SRE Agent portal. No app development required.
 
 ---
 
@@ -35,12 +37,18 @@ Deploy a realistic e-commerce platform ("Zava"), break it on purpose, and watch 
 
 | Tool | Version | Install |
 |------|---------|---------|
+| VS Code | latest | `winget install Microsoft.VisualStudioCode` |
+| GitHub Copilot | in VS Code | Install the **GitHub Copilot** + **Copilot Chat** extensions and sign in |
 | Azure CLI | 2.60+ | `winget install Microsoft.AzureCLI` |
 | PowerShell | 7+ | `winget install Microsoft.PowerShell` |
 | Bicep | bundled with az | `az bicep install` |
 | .NET SDK | 8+ | `winget install Microsoft.DotNet.SDK.8` |
 | Python | 3.11+ | `winget install Python.Python.3.12` |
 | SRE Agent CLI | latest | `dotnet tool install sreagent.cli --global` |
+
+> **Beginner note:** the recommended path drives everything from **VS Code + GitHub Copilot** using
+> the **SREdemo** agent, so those two are the only tools you install by hand — SREdemo runs the rest
+> (Azure CLI, PowerShell, Bicep) for you.
 
 You also need:
 
@@ -54,57 +62,51 @@ You also need:
 
 ## Part 1 — Deploy the infrastructure
 
-The deployment is fully automated. Pick **one** of the two paths below.
+> **New to GitHub Copilot?** You don't need to know the Azure CLI. This repo ships a built-in helper
+> agent called **SREdemo** that runs the whole deployment for you in the terminal — explaining each
+> step — and then walks you through the portal clicks. You just give it your Azure IDs.
 
-### Path A — Agent-driven (recommended)
+### Deploy with the SREdemo agent (recommended)
 
-Open [`deployment_plan.md`](deployment_plan.md) in VS Code and hand it to the assistant. It asks for **tenant ID + subscription ID only**, then executes Steps 1–11:
+1. **Open this repo in VS Code** with GitHub Copilot enabled.
+2. Open **Copilot Chat** — the chat icon in the Activity Bar, or press `Ctrl`+`Alt`+`I`.
+3. In the chat box, type **`@SREdemo`**. That mention picks up the custom agent defined in
+   [`.github/agents/SREdemo.agent.md`](.github/agents/SREdemo.agent.md) (it loads automatically when
+   this repo is open). *(You can also pick **SREdemo** from the agent dropdown instead.)*
+4. Paste this prompt — it already starts with `@SREdemo` — and press Enter:
 
-1. `az login` to your tenant + subscription.
-2. Picks a region with App Service + SQL capacity.
-3. Generates a unique 6-char suffix (e.g. `a1b2c3`).
-4. Deploys `infra/main.bicep`.
-5. Seeds SQL (`infra/seed-database.sql`).
-6. Zip-deploys all three apps.
-7. Validates every resource + endpoint.
-8. Hands off to Part 2 below.
+   ```text
+   @SREdemo Let's deploy the Azure Friday SRE Agent demo from scratch. I'm new to SRE and to
+   GitHub Copilot, so be my partner and go one small step at a time, waiting for me after each
+   step. First ask me for my Azure tenant ID and subscription ID, then confirm we are on the
+   correct subscription before deploying anything that costs money. Deploy everything you can
+   from the terminal and explain what is happening. When a step must be done in the Azure portal,
+   give me simple click-by-click directions.
+   ```
 
-Watch the runbook output for your `Prefix` and `ResourceGroup` values — you'll reuse them in Parts 2–3.
+5. Have your Azure **tenant ID** and **subscription ID** ready. SREdemo signs in, **confirms the
+   target subscription with you**, deploys the workload, validates it, then starts Part 2.
 
-### Path B — Run the script directly
+Under the hood the agent follows [`deployment_plan.md`](deployment_plan.md): it generates a unique
+6-char suffix and resource names, picks a region with capacity (`centralus` first), deploys
+`infra/main.bicep`, seeds SQL, zip-deploys all three apps, and validates every endpoint. Watch for
+your **Prefix** (e.g. `zava-a1b2c3`) and **ResourceGroup** — you'll reuse them in Parts 2–3.
 
-```powershell
-$Suffix = -join ((48..57) + (97..102) | Get-Random -Count 6 | ForEach-Object { [char]$_ })
-$Prefix = "zava-$Suffix"
-$ResourceGroup = "rg-$Prefix"
-
-az login --tenant <tenant-id>
-az account set --subscription <subscription-id>
-az group create -n $ResourceGroup -l centralus
-
-./infra/deploy.ps1 -ResourceGroup $ResourceGroup -Location centralus -Prefix $Prefix
-```
-
-`deploy.ps1` prompts for the SQL admin password if you run it directly. The agent-driven `deployment_plan.md` path may generate a transient password and intentionally does not write it to disk or print it. If you do not know the current SQL password when configuring the SQL MCP connector, reset it before Part 2.
-
-To reset it safely without echoing the value in your terminal history:
-
-```powershell
-$Secure = Read-Host "New SQL admin password" -AsSecureString
-$Bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
-$SqlPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($Bstr)
-
-az sql server update -g $ResourceGroup -n "sql-$Prefix" --admin-password $SqlPassword
-
-$ConnectionString = "Server=tcp:sql-$Prefix.database.windows.net,1433;Database=sqldb-$Prefix;User ID=sqladmin;Password=$SqlPassword;Encrypt=True;TrustServerCertificate=False;"
-az webapp config connection-string set -g $ResourceGroup -n "app-$Prefix" --connection-string-type SQLAzure --settings DefaultConnection="$ConnectionString"
-az webapp restart -g $ResourceGroup -n "app-$Prefix"
-
-[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($Bstr)
-Remove-Variable SqlPassword, ConnectionString, Secure, Bstr
-```
-
-Use the same new password as `DB_PASSWORD` in the SQL MCP connector.
+> **Where is my SQL password?** SREdemo generates a strong SQL admin password and keeps it in memory
+> for the session only — it is never written to disk or printed. You need it once, when you add the
+> SQL connector in Part 2, and the agent fills it in for you. If you ever lose it, reset it safely:
+>
+> ```powershell
+> $Secure = Read-Host "New SQL admin password" -AsSecureString
+> $Bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
+> $SqlPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($Bstr)
+> az sql server update -g $ResourceGroup -n "sql-$Prefix" --admin-password $SqlPassword
+> $ConnectionString = "Server=tcp:sql-$Prefix.database.windows.net,1433;Database=sqldb-$Prefix;User ID=sqladmin;Password=$SqlPassword;Encrypt=True;TrustServerCertificate=False;"
+> az webapp config connection-string set -g $ResourceGroup -n "app-$Prefix" --connection-string-type SQLAzure --settings DefaultConnection="$ConnectionString"
+> az webapp restart -g $ResourceGroup -n "app-$Prefix"
+> ```
+>
+> Then use the same new password as `DB_PASSWORD` in the SQL MCP connector (Part 2, Step 2).
 
 ### Verify
 
@@ -145,6 +147,10 @@ Azure SRE Agent has **no ARM / Bicep / `az` creation path** today. You'll create
    - Click **Logs** and select the demo Log Analytics / App Insights resources if shown.
    - Click **Code** if you want Scenario 3 to inspect this GitHub repo.
    - Click **Done and go to agent** when finished.
+
+![Azure SRE Agent home for zava-sreagent-1 with a green Logs, Incidents, and Azure resources connector bar](docs/images/sre-agent-home.png)
+
+*Agent home. The green **Logs · Incidents · Azure resources** bar means context is attached and the agent is ready. (Save this screenshot as `docs/images/sre-agent-home.png` — see [`docs/images/README.md`](docs/images/README.md).)*
 
 If the agent opens an onboarding chat and asks what these apps do, paste this:
 
@@ -212,6 +218,10 @@ The **Capabilities → Tools** page shows tools that are already connected. If i
 
    `mssql_run_sql_query` is needed because Scenario 1 creates an index and Scenario 2 may kill a blocking session. Keep the agent in approval mode for risky SQL changes.
 10. Go back to **Capabilities → Tools → MCP servers + services**. You should now see `zava-sql` and several active SQL tools.
+
+![The zava-sql MCP Server connector setup with the Streamable-HTTP versus Stdio connection-type choice](docs/images/sql-mcp-connector.png)
+
+*Setting up the `zava-sql` connector. Choose **Stdio** (not Streamable-HTTP) so you can enter the `npx` command and the `DB_*` variables, then wait for status **Connected**.*
 
 If you reset the SQL password after deployment, update the main app connection string as shown in Part 1 so `/health` continues to work.
 
@@ -298,6 +308,10 @@ The portal no longer has a separate **Alert Handlers** blade. Azure Monitor aler
    ```
 
    Add `alert-<prefix>-http-5xx` and `alert-<prefix>-health-check` later if you want the same response plan to catch web/app-health failures too. Starting with only the DTU alert keeps Scenario 1 easy to validate.
+
+![The zava-response-plan row in the Incident Response Plans list showing Title contains the DTU alert, Status On, and Autonomy level Review](docs/images/response-plan.png)
+
+*The saved `zava-response-plan`. **Review** autonomy is what makes the agent pause for your approval before it changes any SQL.*
 
 The Bicep deployment creates these alert rules in `rg-zava-<suffix>`:
 
@@ -430,6 +444,16 @@ $env:ZAVA_DTU_ALERT_NAME = "alert-$Prefix-dtu-high"
 # Scenario 3 uses the Azure Monitor health-check alert; no HTTP trigger is required.
 ```
 
+> **Two gotchas that trip people up:**
+> 1. Run the simulator in the **same terminal** where you set the `ZAVA_*` variables above — a newly
+>    opened terminal does **not** inherit them.
+> 2. If the simulator can't reach SQL, add this machine's IP to the SQL firewall (the deploy removes
+>    it after seeding):
+>    ```powershell
+>    $ip = (Invoke-RestMethod https://api.ipify.org)
+>    az sql server firewall-rule create -g $ResourceGroup -s "sql-$Prefix" -n SimClient --start-ip-address $ip --end-ip-address $ip
+>    ```
+
 ---
 
 ### Scenario 1 — Slow Query (missing index)
@@ -462,6 +486,10 @@ flowchart LR
 python simulator/demo.py 1
 ```
 
+> **Heads-up:** the **first** time you run Scenario 1 it expands the Products table to ~2,000,000
+> rows (a one-time setup that takes a few minutes) before the spike. Run it once to warm up **before**
+> a live audience so the real run reacts fast.
+
 **Watch for (2–5 min):**
 
 1. Simulator shows query latency ~800–2000 ms.
@@ -469,7 +497,19 @@ python simulator/demo.py 1
 3. SRE Agent incident opens and asks for approval before SQL remediation.
 4. Approve creating `IX_Products_Category` if the agent confirms the index is missing.
 5. Simulator detects `IX_Products_Category` and prints before/after.
-5. Latency drops to ~5 ms.
+6. Latency drops to ~5 ms.
+
+Before the alert fires, the **Incidents** list is empty:
+
+![Empty Incidents list showing No incidents found](docs/images/incidents-empty.png)
+
+When the DTU alert fires, an incident opens and the agent starts investigating:
+
+![Incidents list with the DTU alert, Acknowledged status, agent In progress, and the zava-response-plan](docs/images/incident-active.png)
+
+Open the incident and the agent proposes the fix, then waits for your approval (Review mode):
+
+![Incident thread where the agent proposes CREATE INDEX IX_Products_Category with an Approve button](docs/images/incident-approval.png)
 
 ---
 

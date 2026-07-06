@@ -507,9 +507,11 @@ When the DTU alert fires, an incident opens and the agent starts investigating:
 
 ![Incidents list with the DTU alert, Acknowledged status, agent In progress, and the zava-response-plan](docs/images/incident-active.png)
 
-Open the incident and the agent proposes the fix, then waits for your approval (Review mode):
+Open the incident and you'll see the agent's full investigation — it connects to SQL through `zava-sql`, checks the index, fragmentation, and execution plan, and explains the root cause:
 
-![Incident thread where the agent proposes CREATE INDEX IX_Products_Category with an Approve button](docs/images/incident-approval.png)
+![Incident thread showing the agent's Investigation Results table and root-cause analysis](docs/images/incident-investigation.png)
+
+On a **fresh** deployment (index missing) the agent proposes `CREATE INDEX IX_Products_Category` and, because autonomy is **Review**, pauses for your **Approve**. On a database where the index already exists it correctly reports *"no remediation needed"* — as shown above — instead of making a needless change.
 
 ---
 

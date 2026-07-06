@@ -20,11 +20,9 @@ spec:
         risks = []
         risk_score = 0
 
-        # 1. Business hours check
+        # 1. Business hours check (UTC 14:00-06:00 ~= 6 AM-10 PM US Pacific)
         hour = datetime.utcnow().hour
-        is_business_hours = 14 <= hour <= 6  # 6AM-10PM Pacific (UTC-8)
-        # Simplified: check if roughly business hours US
-        is_business_hours = 14 <= hour or hour <= 6
+        is_business_hours = hour >= 14 or hour <= 6
         if is_business_hours:
             risks.append({'factor': 'Business Hours', 'level': 'WARNING', 'detail': f'Current time is {datetime.utcnow().strftime("%H:%M")} UTC — business hours in US Pacific. Schema changes may impact active users.'})
             risk_score += 30

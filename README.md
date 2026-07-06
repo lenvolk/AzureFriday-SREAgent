@@ -365,7 +365,7 @@ To verify in the portal, go to **Builder → Hooks** and confirm both hooks exis
 - **Description:** `AI-powered risk assessment for SQL operations. Evaluates blast radius, business hours, and data sensitivity. Supports human-in-the-loop approval override.`
 - **Hook type:** `Prompt`
 - **Model:** `Reasoning Fast`
-- **Tool matcher:** `.*create_index.*|.*update_data.*|.*delete_data.*|.*insert_data.*`
+- **Tool matcher:** `.*mssql.*|.*sql.*`
 - **Timeout:** `30`
 - **Fail mode:** `Allow`
 - **Source:** [`sre-config/agent1/hooks/change-risk-assessor.yaml`](sre-config/agent1/hooks/change-risk-assessor.yaml)
@@ -385,6 +385,23 @@ To verify in the portal, go to **Builder → Hooks** and confirm both hooks exis
 Manual fallback: if the REST call fails, create the hooks in **Builder → Hooks** and copy only the `prompt: |` block for `change-risk-assessor` and only the `script: |` block for `sql-write-guard`. Do not paste the full YAML file into either portal field.
 
 The broader [`sre-config/agent1/`](sre-config/agent1/) folder also contains skills, custom-agent YAML, tools, and scheduled tasks for source control. Those make the demo richer when `srectl` is available, but the hooks above are the core governance layer for safe SQL remediation.
+
+### Step 7 — (Optional) Teams notifications and thread sharing
+
+These two additions make the demo land better in a live room. Neither is required for Scenarios 1–3 to work.
+
+**Post investigation summaries to a Teams channel.** With the Teams connector, the agent can push the incident, its root cause, and the proposed mitigation straight into a channel the audience is watching.
+
+1. In SRE Agent, go to **Builder → Connectors → + Add connector**.
+2. Choose **Send notification (Microsoft Teams)**, then **Next**. An agent can have only one Teams connector.
+3. Select **Sign in to Microsoft Teams** and complete the OAuth popup. Allow popups from `sre.azure.com` if it is blocked.
+4. In Teams, right-click the target channel → **Get link to channel**, and paste the URL into **Teams channel link**.
+5. Pick a **Managed identity** and select **Add connector**. You need Contributor (`Microsoft.Web/connections/write` + `Microsoft.Authorization/roleAssignments/write`) on the agent's resource group.
+6. Add one line to your Scenario 1 response plan so the agent notifies the channel, for example: *"After you summarize the root cause and remediation, post a short summary to the connected Teams channel."*
+
+**Share the live investigation thread.** During the demo, open the incident thread, select the **⋯** next to the thread title, and choose **Copy link to thread**. Paste that deep link into Teams or chat so the audience can follow the agent's reasoning in real time.
+
+> For the full live-delivery plan (timings, talking points, fallback), see [`docs/townhall-run-of-show.md`](docs/townhall-run-of-show.md).
 
 ---
 
@@ -541,24 +558,44 @@ python simulator/demo.py 3
 
 ## Optional — Scenario 4 (ServiceNow Integration)
 
-Requires a free [ServiceNow PDI](https://developer.servicenow.com/) plus a second SRE Agent.
+Requires a free [ServiceNow PDI](https://developer.servicenow.com/) plus a second SRE Agent. Scenario 4 shows the agent running an IT service-management workflow: pick up a ServiceNow incident, validate warranty, file a laptop-replacement request, and write the result back to the ticket.
 
-1. Create **Agent 2** at <https://sre.azure.com>, name `zava-sreagent-2`, attach to the same `rg-zava-<suffix>`.
-2. Apply Agent 2 config:
+> **Why a second agent?** Only **one incident platform can be active per agent at a time** — connecting ServiceNow to an agent disconnects Azure Monitor. Keep **Agent 1 on Azure Monitor** (Scenarios 1–3) and dedicate **Agent 2 to ServiceNow** so you never break Scenarios 1–3.
 
-   ```powershell
-   srectl config set-context /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-2-name>
-   srectl apply -f sre-config/agent2/agents/
-   srectl apply -f sre-config/agent2/tools/
-   ```
+### Step 1 — Create Agent 2
 
-3. Set ServiceNow env vars and run `python simulator/demo.py 4`:
+Create **Agent 2** at <https://sre.azure.com>, name `zava-sreagent-2`, and attach it to the same `rg-zava-<suffix>`.
 
-   ```powershell
-   $env:ZAVA_SN_URL  = "https://dev123456.service-now.com"
-   $env:ZAVA_SN_USER = "admin"
-   $env:ZAVA_SN_PASS = "<your instance password>"
-   ```
+### Step 2 — Connect ServiceNow as a managed incident platform (recommended)
+
+This is the modern path. The managed connector handles authentication in the portal, so you no longer embed ServiceNow credentials in a custom tool.
+
+1. Go to **Builder → Incident platform**.
+2. Select **ServiceNow** and connect to your PDI (instance URL + credentials).
+3. Native ServiceNow tools are then available automatically — read incident details, post discussion entries, acknowledge, and resolve — no custom tool required.
+4. Set up **ServiceNow indexing** so the agent can find incidents by number natively — see [Set up ServiceNow indexing](https://learn.microsoft.com/en-us/azure/sre-agent/setup-servicenow-indexing). With indexing you can drop the legacy `LookupServiceNowIncident` tool.
+5. Connecting a platform auto-creates a **quickstart** response plan. If you add your own plan, go to **Builder → Incident response plans**, switch to **Table view**, and delete `quickstart_handler` so incidents aren't processed twice.
+
+### Step 3 — Apply the Agent 2 workflow config
+
+`CheckWarranty` (warranty lookup) and the browser-operator laptop-request step are app-specific, so they remain repo config:
+
+```powershell
+srectl config set-context /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.App/agents/<agent-2-name>
+srectl apply -f sre-config/agent2/agents/
+srectl apply -f sre-config/agent2/tools/
+```
+
+> **Legacy fallback.** [`sre-config/agent2/tools/LookupServiceNowIncident/`](sre-config/agent2/tools/LookupServiceNowIncident/) resolves a ServiceNow `sys_id` from an INC number using credentials embedded in the tool code. Prefer the managed connector + indexing from Step 2. If you must use it, treat the instance URL and password as secrets — never commit real values.
+
+### Step 4 — Run it
+
+```powershell
+$env:ZAVA_SN_URL  = "https://dev123456.service-now.com"
+$env:ZAVA_SN_USER = "admin"
+$env:ZAVA_SN_PASS = "<your instance password>"
+python simulator/demo.py 4
+```
 
 ---
 

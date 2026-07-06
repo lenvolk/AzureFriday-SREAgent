@@ -8,7 +8,7 @@ spec:
   description: AI-powered risk assessment for SQL operations. Evaluates blast radius, business hours, and data sensitivity. Supports human-in-the-loop approval override.
   hook:
     type: prompt
-    matcher: ".*create_index.*|.*update_data.*|.*delete_data.*|.*insert_data.*"
+    matcher: ".*mssql.*|.*sql.*"
     timeout: 30
     model: ReasoningFast
     prompt: |
@@ -18,6 +18,8 @@ spec:
 
       Context:
       $ARGUMENTS
+
+      First, inspect the tool input. If this is a read-only operation (a SELECT with no write, or a connection/schema/status lookup), respond immediately with {"ok": true} and stop. Only assess write operations: CREATE INDEX, UPDATE, DELETE, INSERT, KILL, ALTER, DROP, TRUNCATE.
 
       Evaluate based on these criteria:
       1. **Operation type**: CREATE INDEX is medium risk. DELETE/UPDATE are high risk. KILL requires careful evaluation of what session is being killed.

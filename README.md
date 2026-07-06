@@ -6,6 +6,11 @@ Deploy a realistic e-commerce platform ("Zava"), break it on purpose, and watch 
 > Copilot. You'll let a built-in helper agent (**SREdemo**) run the deployment for you and then click
 > through the SRE Agent portal. No app development required.
 
+> **AKS-heavy audience?** This repo's default track is App Service + Azure SQL (with a human-in-the-loop
+> governance story). For an **AKS network + bad-deploy auto-repair** track — private AKS, hub-and-spoke
+> Azure Firewall, VNet-injected agent — see **[`docs/aks-demo.md`](docs/aks-demo.md)**: a curated
+> 1-hour run of show built on the companion `zava-aks-postgres` lab.
+
 ---
 
 ## What gets deployed
